@@ -3,25 +3,13 @@ import { join, basename } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { simpleGit, SimpleGit } from 'simple-git'
-import { writeFileSync, readFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs'
-
-// 简单的配置存储
-const configPath = join(app.getPath('userData'), 'config.json')
-const getConfig = (): Record<string, unknown> => {
-  try {
-    if (existsSync(configPath)) {
-      return JSON.parse(readFileSync(configPath, 'utf-8'))
-    }
-  } catch {
-    // ignore
-  }
-  return {}
-}
-const setConfig = (key: string, value: unknown): void => {
-  const config = getConfig()
-  config[key] = value
-  writeFileSync(configPath, JSON.stringify(config, null, 2))
-}
+import { readdirSync, statSync, unlinkSync, existsSync } from 'fs'
+import { initDatabase, closeDatabase } from './database'
+import { getAllRepositories, saveRepositories } from './database/repositories/repository'
+import { getAllTemplates, saveTemplates } from './database/repositories/template'
+import { getAllNotes, saveNotes } from './database/repositories/note'
+import { getAllWritingExamples, saveWritingExamples } from './database/repositories/writing-example'
+import { getSetting, setSetting, getSettingAsJson, setSettingAsJson } from './database/repositories/settings'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -129,20 +117,19 @@ ipcMain.handle('get-commits', async (_event, repoPath: string, since?: string) =
 
 // 保存 API Key
 ipcMain.handle('save-api-key', async (_event, { provider, key }) => {
-  setConfig(`apiKeys_${provider}`, key)
+  setSetting(`apiKeys_${provider}`, key)
   return { success: true }
 })
 
 // 获取 API Key
 ipcMain.handle('get-api-key', async (_event, provider: string) => {
-  return getConfig()[`apiKeys_${provider}`]
+  return getSetting(`apiKeys_${provider}`)
 })
 
 // 获取模型列表
 ipcMain.handle('get-models', async (_event, provider: string) => {
   try {
-    const config = getConfig()
-    const apiKey = config[`apiKeys_${provider}`] as string
+    const apiKey = getSetting(`apiKeys_${provider}`)
 
     // 根据不同供应商获取模型列表
     let baseUrl = ''
@@ -156,20 +143,37 @@ ipcMain.handle('get-models', async (_event, provider: string) => {
       case 'deepseek':
         baseUrl = 'https://api.deepseek.com/v1/models'
         break
+      case 'siliconflow':
+        baseUrl = 'https://api.siliconflow.cn/v1/models'
+        break
+      case 'zhipu':
+        baseUrl = 'https://open.bigmodel.cn/api/paas/v4/models'
+        break
+      case 'openrouter':
+        baseUrl = 'https://openrouter.ai/api/v1/models'
+        break
       case 'ollama':
         baseUrl = 'http://localhost:11434/api/tags'
         break
-      default:
+      default: {
         // 检查是否是自定义供应商
-        const customProviders = (config['customProviders'] as Array<{
-          id: string
-          baseUrl: string
-          apiKey: string
-        }>) || []
+        const customProviders = getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>('customProviders') || []
         const custom = customProviders.find((p) => p.id === provider)
         if (custom) {
-          baseUrl = `${custom.baseUrl}/models`
+          // 智能补全模型列表 URL
+          let customBaseUrl = custom.baseUrl.replace(/\/+$/, '')
+          if (customBaseUrl.includes('/chat/completions')) {
+            customBaseUrl = customBaseUrl.replace('/chat/completions', '/models')
+          } else if (/\/v\d+$/.test(customBaseUrl)) {
+            customBaseUrl = `${customBaseUrl}/models`
+          } else if (/\/v\d+\//.test(customBaseUrl)) {
+            customBaseUrl = `${customBaseUrl}/models`
+          } else {
+            customBaseUrl = `${customBaseUrl}/v1/models`
+          }
+          baseUrl = customBaseUrl
         }
+      }
     }
 
     if (!baseUrl) {
@@ -224,112 +228,145 @@ ipcMain.handle('get-models', async (_event, provider: string) => {
 
 // 保存自定义供应商
 ipcMain.handle('save-custom-providers', async (_event, providers) => {
-  setConfig('customProviders', providers)
+  setSettingAsJson('customProviders', providers)
   return { success: true }
 })
 
 // 获取自定义供应商
 ipcMain.handle('get-custom-providers', async () => {
-  return getConfig()['customProviders'] || []
+  return getSettingAsJson('customProviders') || []
 })
 
 // 保存选中的模型
 ipcMain.handle('save-selected-model', async (_event, model: string) => {
-  setConfig('selectedModel', model)
+  setSetting('selectedModel', model)
   return { success: true }
 })
 
 // 获取选中的模型
 ipcMain.handle('get-selected-model', async () => {
-  return getConfig()['selectedModel']
+  return getSetting('selectedModel')
 })
 
 // 保存仓库列表
 ipcMain.handle('save-repositories', async (_event, repositories) => {
-  setConfig('repositories', repositories)
+  saveRepositories(repositories)
   return { success: true }
 })
 
 // 获取仓库列表
 ipcMain.handle('get-repositories', async () => {
-  return getConfig()['repositories'] || []
+  return getAllRepositories()
 })
 
 // 保存模版列表
 ipcMain.handle('save-templates', async (_event, templates) => {
-  setConfig('templates', templates)
+  saveTemplates(templates)
   return { success: true }
 })
 
 // 获取模版列表
 ipcMain.handle('get-templates', async () => {
-  return getConfig()['templates']
+  return getAllTemplates()
 })
 
 // 保存选中的模版
 ipcMain.handle('save-selected-template', async (_event, templateId: string) => {
-  setConfig('selectedTemplate', templateId)
+  setSetting('selectedTemplate', templateId)
   return { success: true }
 })
 
 // 获取选中的模版
 ipcMain.handle('get-selected-template', async () => {
-  return getConfig()['selectedTemplate']
+  return getSetting('selectedTemplate')
 })
 
 // 保存当前供应商
 ipcMain.handle('save-current-provider', async (_event, provider: string) => {
-  setConfig('currentProvider', provider)
+  setSetting('currentProvider', provider)
   return { success: true }
 })
 
 // 获取当前供应商
 ipcMain.handle('get-current-provider', async () => {
-  return getConfig()['currentProvider'] || 'openai'
+  return getSetting('currentProvider') || 'openai'
 })
 
 // 保存写作示例
 ipcMain.handle('save-writing-examples', async (_event, examples) => {
-  setConfig('writingExamples', examples)
+  saveWritingExamples(examples)
   return { success: true }
 })
 
 // 获取写作示例
 ipcMain.handle('get-writing-examples', async () => {
-  return getConfig()['writingExamples'] || []
+  return getAllWritingExamples()
 })
 
 // 保存日期筛选与模版的关联
 ipcMain.handle('save-filter-template-map', async (_event, map) => {
-  setConfig('filterTemplateMap', map)
+  setSettingAsJson('filterTemplateMap', map)
   return { success: true }
 })
 
 // 获取日期筛选与模版的关联
 ipcMain.handle('get-filter-template-map', async () => {
-  return getConfig()['filterTemplateMap'] || {}
+  return getSettingAsJson('filterTemplateMap') || {}
 })
 
 // 保存选中的用户
 ipcMain.handle('save-selected-author', async (_event, author: string | null) => {
-  setConfig('selectedAuthor', author)
+  setSetting('selectedAuthor', author || '')
   return { success: true }
 })
 
 // 获取选中的用户
 ipcMain.handle('get-selected-author', async () => {
-  return getConfig()['selectedAuthor'] || null
+  return getSetting('selectedAuthor') || null
 })
 
 // 保存系统提示词
 ipcMain.handle('save-system-prompt', async (_event, prompt: string) => {
-  setConfig('systemPrompt', prompt)
+  setSetting('systemPrompt', prompt)
   return { success: true }
 })
 
 // 获取系统提示词
 ipcMain.handle('get-system-prompt', async () => {
-  return getConfig()['systemPrompt'] || null
+  return getSetting('systemPrompt') || null
+})
+
+// 保存笔记
+ipcMain.handle('save-notes', async (_event, notes) => {
+  saveNotes(notes)
+  return { success: true }
+})
+
+// 获取笔记
+ipcMain.handle('get-notes', async () => {
+  return getAllNotes()
+})
+
+// 保存主题设置
+ipcMain.handle('save-theme-mode', async (_event, mode) => {
+  setSetting('themeMode', mode)
+  return { success: true }
+})
+
+// 获取主题设置
+ipcMain.handle('get-theme-mode', async () => {
+  return getSetting('themeMode') || 'system'
+})
+
+// 保存 Git 用户名
+ipcMain.handle('save-git-username', async (_event, username: string) => {
+  setSetting('gitUsername', username)
+  return { success: true }
+})
+
+// 获取 Git 用户名
+ipcMain.handle('get-git-username', async () => {
+  return getSetting('gitUsername') || null
 })
 
 // 用于存储当前流式生成的 reader，以便取消
@@ -370,8 +407,7 @@ ipcMain.on(
       console.log('供应商:', provider)
       console.log('模型:', model)
 
-      const config = getConfig()
-      const apiKey = config[`apiKeys_${provider}`] as string
+      const apiKey = getSetting(`apiKeys_${provider}`)
 
       // 根据不同供应商调用 API
       let baseUrl = ''
@@ -383,6 +419,15 @@ ipcMain.on(
           break
         case 'deepseek':
           baseUrl = 'https://api.deepseek.com/v1/chat/completions'
+          break
+        case 'siliconflow':
+          baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+          break
+        case 'zhipu':
+          baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+          break
+        case 'openrouter':
+          baseUrl = 'https://openrouter.ai/api/v1/chat/completions'
           break
         case 'gemini': {
           // Gemini 流式生成
@@ -475,11 +520,7 @@ ipcMain.on(
         }
         default: {
           // 检查是否是自定义供应商
-          const customProviders = (config['customProviders'] as Array<{
-            id: string
-            baseUrl: string
-            apiKey: string
-          }>) || []
+          const customProviders = getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>('customProviders') || []
           const custom = customProviders.find((p) => p.id === provider)
           if (custom) {
             baseUrl = `${custom.baseUrl}/chat/completions`
@@ -530,7 +571,7 @@ ipcMain.on(
       const decoder = new TextDecoder()
 
       // 处理单行 SSE 数据的函数
-      const processLine = (line: string) => {
+      const processLine = (line: string): void => {
         const trimmedLine = line.trim()
         if (!trimmedLine) return
         if (trimmedLine.startsWith('data: ')) {
@@ -544,7 +585,7 @@ ipcMain.on(
               console.log('收到内容片段:', content.substring(0, 20) + '...')
               event.reply('generate-report-chunk', content)
             }
-          } catch (e) {
+          } catch {
             console.log('JSON 解析失败，原始数据:', data.substring(0, 100))
           }
         }
@@ -644,6 +685,9 @@ function getDirSize(dirPath: string): number {
 }
 
 app.whenReady().then(() => {
+  // 初始化数据库
+  initDatabase()
+
   electronApp.setAppUserModelId('com.sookool.assistant')
 
   app.on('browser-window-created', (_, window) => {
@@ -661,4 +705,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('quit', () => {
+  closeDatabase()
 })

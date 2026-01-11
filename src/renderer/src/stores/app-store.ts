@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
-export type ViewType = 'dashboard' | 'projects' | 'templates' | 'settings'
+export type ViewType = 'dashboard' | 'projects' | 'templates' | 'settings' | 'notes'
+export type ThemeMode = 'light' | 'dark' | 'system'
 
 export interface Commit {
   hash: string
@@ -40,6 +41,14 @@ export interface WritingExample {
   createdAt: Date
 }
 
+export interface Note {
+  id: string
+  date: string // YYYY-MM-DD 格式
+  content: string // Markdown 格式内容
+  createdAt: Date
+  updatedAt: Date
+}
+
 interface AppState {
   initialized: boolean
   initializeStore: () => Promise<void>
@@ -52,7 +61,10 @@ interface AppState {
   addRepository: (repo: Omit<Repository, 'id' | 'selected'>) => void
   removeRepository: (id: string) => void
   toggleRepository: (id: string) => void
-  updateRepository: (id: string, updates: Partial<Pick<Repository, 'alias' | 'description'>>) => void
+  updateRepository: (
+    id: string,
+    updates: Partial<Pick<Repository, 'alias' | 'description'>>
+  ) => void
 
   commits: Commit[]
   setCommits: (commits: Commit[]) => void
@@ -79,6 +91,19 @@ interface AppState {
   addWritingExample: (example: Omit<WritingExample, 'id' | 'createdAt'>) => boolean
   removeWritingExample: (id: string) => void
 
+  // 笔记
+  notes: Note[]
+  selectedNoteDate: string | null
+  setSelectedNoteDate: (date: string | null) => void
+  addOrUpdateNote: (date: string, content: string) => void
+  getNoteByDate: (date: string) => Note | undefined
+  getWeekNotes: (weekStart: Date) => Note[]
+  selectedNotes: string[]
+  toggleNote: (date: string) => void
+  selectAllNotes: () => void
+  clearSelectedNotes: () => void
+  selectAllNotesAndCommits: () => void
+
   dateRange: { start: Date; end: Date }
   setDateRange: (range: { start: Date; end: Date }) => void
 
@@ -98,6 +123,14 @@ interface AppState {
 
   apiStatus: 'connected' | 'disconnected' | 'checking'
   setApiStatus: (status: 'connected' | 'disconnected' | 'checking') => void
+
+  // 主题设置
+  themeMode: ThemeMode
+  setThemeMode: (mode: ThemeMode) => void
+
+  // Git 用户名
+  gitUsername: string | null
+  setGitUsername: (name: string | null) => void
 }
 
 const defaultTemplates: Template[] = [
@@ -157,6 +190,36 @@ const saveFilterTemplateMap = (map: Record<string, string>) => {
   window.electron.ipcRenderer.invoke('save-filter-template-map', map)
 }
 
+// 保存笔记
+const saveNotes = (notes: Note[]) => {
+  window.electron.ipcRenderer.invoke('save-notes', notes)
+}
+
+// 保存主题设置
+const saveThemeMode = (mode: ThemeMode) => {
+  window.electron.ipcRenderer.invoke('save-theme-mode', mode)
+}
+
+// 应用主题到 DOM
+const applyTheme = (mode: ThemeMode) => {
+  const root = document.documentElement
+  let isDark = false
+
+  if (mode === 'system') {
+    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  } else {
+    isDark = mode === 'dark'
+  }
+
+  if (isDark) {
+    root.classList.add('dark')
+    root.style.colorScheme = 'dark'
+  } else {
+    root.classList.remove('dark')
+    root.style.colorScheme = 'light'
+  }
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   initialized: false,
   initializeStore: async () => {
@@ -167,14 +230,22 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ repositories: savedRepos })
       }
 
-      // 加载自定义模版
+      // 加载模版
       const savedTemplates = await window.electron.ipcRenderer.invoke('get-templates')
-      if (savedTemplates && Array.isArray(savedTemplates)) {
-        set({ templates: [...defaultTemplates, ...savedTemplates] })
+      if (savedTemplates && Array.isArray(savedTemplates) && savedTemplates.length > 0) {
+        // 如果数据库中已有模版（包含内置模版），直接使用
+        const hasBuiltin = savedTemplates.some((t: { id: string }) => t.id === 'daily' || t.id === 'weekly')
+        if (hasBuiltin) {
+          set({ templates: savedTemplates })
+        } else {
+          // 否则合并默认模版
+          set({ templates: [...defaultTemplates, ...savedTemplates] })
+        }
       }
 
       // 加载选中的模版
-      const savedSelectedTemplate = await window.electron.ipcRenderer.invoke('get-selected-template')
+      const savedSelectedTemplate =
+        await window.electron.ipcRenderer.invoke('get-selected-template')
       if (savedSelectedTemplate) {
         set({ selectedTemplate: savedSelectedTemplate })
       }
@@ -186,16 +257,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       // 加载日期筛选与模版的关联
-      const savedFilterTemplateMap = await window.electron.ipcRenderer.invoke('get-filter-template-map')
+      const savedFilterTemplateMap =
+        await window.electron.ipcRenderer.invoke('get-filter-template-map')
       if (savedFilterTemplateMap && typeof savedFilterTemplateMap === 'object') {
         set({ filterTemplateMap: savedFilterTemplateMap })
       }
 
-      // 加载选中的用户
+      // 加载 Git 用户名
+      const savedGitUsername = await window.electron.ipcRenderer.invoke('get-git-username')
+      if (savedGitUsername) {
+        set({ gitUsername: savedGitUsername })
+      }
+
+      // 加载选中的用户，如果未设置则使用 Git 用户名
       const savedAuthor = await window.electron.ipcRenderer.invoke('get-selected-author')
       if (savedAuthor) {
         set({ selectedAuthor: savedAuthor })
+      } else if (savedGitUsername) {
+        set({ selectedAuthor: savedGitUsername })
       }
+
+      // 加载笔记
+      const savedNotes = await window.electron.ipcRenderer.invoke('get-notes')
+      if (savedNotes && Array.isArray(savedNotes)) {
+        set({ notes: savedNotes })
+      }
+
+      // 加载主题设置
+      const savedThemeMode = await window.electron.ipcRenderer.invoke('get-theme-mode')
+      const themeMode = (savedThemeMode as ThemeMode) || 'system'
+      set({ themeMode })
+      applyTheme(themeMode)
+
+      // 监听系统主题变化
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        const currentMode = get().themeMode
+        if (currentMode === 'system') {
+          applyTheme('system')
+        }
+      })
 
       // 自动连接 API
       try {
@@ -244,7 +344,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveRepositories(newRepos)
   },
   toggleRepository: (id) => {
-    const newRepos = get().repositories.map((r) => (r.id === id ? { ...r, selected: !r.selected } : r))
+    const newRepos = get().repositories.map((r) =>
+      r.id === id ? { ...r, selected: !r.selected } : r
+    )
     set({ repositories: newRepos })
     saveRepositories(newRepos)
   },
@@ -332,6 +434,63 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveWritingExamples(newExamples)
   },
 
+  // 笔记
+  notes: [],
+  selectedNoteDate: null,
+  setSelectedNoteDate: (date) => set({ selectedNoteDate: date }),
+  addOrUpdateNote: (date, content) => {
+    const notes = get().notes
+    const existingIndex = notes.findIndex((n) => n.date === date)
+    let newNotes: Note[]
+
+    if (existingIndex >= 0) {
+      // 更新现有笔记
+      newNotes = notes.map((n) => (n.date === date ? { ...n, content, updatedAt: new Date() } : n))
+    } else {
+      // 添加新笔记
+      const newNote: Note = {
+        id: crypto.randomUUID(),
+        date,
+        content,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      newNotes = [...notes, newNote]
+    }
+    set({ notes: newNotes })
+    saveNotes(newNotes)
+  },
+  getNoteByDate: (date) => {
+    return get().notes.find((n) => n.date === date)
+  },
+  getWeekNotes: (weekStart) => {
+    const notes = get().notes
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+
+    return notes.filter((n) => {
+      const noteDate = new Date(n.date)
+      return noteDate >= weekStart && noteDate < weekEnd
+    })
+  },
+  selectedNotes: [],
+  toggleNote: (date) =>
+    set((state) => ({
+      selectedNotes: state.selectedNotes.includes(date)
+        ? state.selectedNotes.filter((d) => d !== date)
+        : [...state.selectedNotes, date]
+    })),
+  selectAllNotes: () =>
+    set((state) => ({
+      selectedNotes: state.notes.map((n) => n.date)
+    })),
+  clearSelectedNotes: () => set({ selectedNotes: [] }),
+  selectAllNotesAndCommits: () =>
+    set((state) => ({
+      selectedCommits: state.commits.map((c) => c.hash),
+      selectedNotes: state.notes.map((n) => n.date)
+    })),
+
   dateRange: {
     start: new Date(new Date().setHours(0, 0, 0, 0)),
     end: new Date()
@@ -356,5 +515,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsGenerating: (value) => set({ isGenerating: value }),
 
   apiStatus: 'disconnected',
-  setApiStatus: (status) => set({ apiStatus: status })
+  setApiStatus: (status) => set({ apiStatus: status }),
+
+  // 主题设置
+  themeMode: 'system',
+  setThemeMode: (mode) => {
+    set({ themeMode: mode })
+    applyTheme(mode)
+    saveThemeMode(mode)
+  },
+
+  // Git 用户名
+  gitUsername: null,
+  setGitUsername: (name) => {
+    set({ gitUsername: name })
+    window.electron.ipcRenderer.invoke('save-git-username', name || '')
+    // 同时更新选中的用户
+    if (name) {
+      set({ selectedAuthor: name })
+      window.electron.ipcRenderer.invoke('save-selected-author', name)
+    }
+  }
 }))

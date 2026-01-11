@@ -65,7 +65,8 @@ describe('AppStore', () => {
   })
 
   it('应该正确选择/取消选择提交', () => {
-    const { setCommits, toggleCommit, selectAllCommits, clearSelectedCommits } = useAppStore.getState()
+    const { setCommits, toggleCommit, selectAllCommits, clearSelectedCommits } =
+      useAppStore.getState()
     const mockCommits = [
       {
         hash: 'abc123',

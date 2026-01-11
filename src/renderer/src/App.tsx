@@ -5,6 +5,7 @@ import { Dashboard } from '@/components/Dashboard'
 import { Projects } from '@/components/Projects'
 import { Templates } from '@/components/Templates'
 import { Settings } from '@/components/Settings'
+import { Notes } from '@/components/Notes'
 import { Composer } from '@/components/Composer'
 import { useAppStore } from '@/stores/app-store'
 
@@ -24,6 +25,8 @@ function App(): React.JSX.Element {
         return <Dashboard />
       case 'projects':
         return <Projects />
+      case 'notes':
+        return <Notes />
       case 'templates':
         return <Templates />
       case 'settings':
@@ -46,16 +49,19 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* 可拖动的标题栏区域 */}
-      <div className="h-12 flex-shrink-0 drag-region flex items-center px-4">
-        {/* 左侧留空给红绿灯按钮 */}
-        <div className="w-20" />
-        <span className="text-sm text-muted-foreground">SooKool Assistant</span>
+    <div className="h-screen flex bg-background">
+      {/* 侧边栏容器 - 带内边距实现悬浮效果 */}
+      <div className="p-2 pr-0 flex flex-col drag-region">
+        <Sidebar />
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
+      {/* 主内容区 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 标题栏 */}
+        <div className="h-11 flex-shrink-0 drag-region flex items-center px-4">
+          <span className="text-sm text-muted-foreground">SooKool Assistant</span>
+        </div>
+
         <main className="flex-1 flex overflow-hidden">
           {renderView()}
           {currentView === 'dashboard' && <Composer />}

@@ -1,74 +1,55 @@
 @import "tailwindcss";
+@plugin './hero.ts';
+@source '../../../node_modules/@heroui/theme/dist/**/*.js';
+@custom-variant dark (&:is(.dark *));
 
-@theme {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-card: #ffffff;
-  --color-card-foreground: #0a0a0a;
-  --color-primary: #007AFF;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f5f5f5;
-  --color-secondary-foreground: #171717;
-  --color-muted: #f5f5f5;
-  --color-muted-foreground: #737373;
-  --color-accent: #f5f5f5;
-  --color-accent-foreground: #171717;
-  --color-destructive: #ef4444;
-  --color-border: #e5e5e5;
-  --color-input: #e5e5e5;
-  --color-ring: #007AFF;
-  --color-added: #22c55e;
-  --color-deleted: #ef4444;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: #1e1e1e;
-    --color-foreground: #fafafa;
-    --color-card: #262626;
-    --color-card-foreground: #fafafa;
-    --color-primary: #007AFF;
-    --color-primary-foreground: #ffffff;
-    --color-secondary: #262626;
-    --color-secondary-foreground: #fafafa;
-    --color-muted: #262626;
-    --color-muted-foreground: #a3a3a3;
-    --color-accent: #262626;
-    --color-accent-foreground: #fafafa;
-    --color-destructive: #dc2626;
-    --color-border: #404040;
-    --color-input: #404040;
-    --color-ring: #007AFF;
-    --color-added: #4ade80;
-    --color-deleted: #f87171;
-  }
-}
-
-* {
-  border-color: var(--color-border);
-}
-
+/* 基础样式 */
+html,
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: "PingFang SC", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    -apple-system,
+    'SF Pro Display',
+    'SF Pro Text',
+    'PingFang SC',
+    BlinkMacSystemFont,
+    'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 毛玻璃效果 */
+/* macOS 风格毛玻璃效果 */
 .glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-@media (prefers-color-scheme: dark) {
-  .glass {
-    background: rgba(30, 30, 30, 0.8);
-  }
+.dark .glass {
+  background: rgba(44, 44, 46, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 悬浮侧边栏样式 */
+.sidebar-float {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.05),
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.dark .sidebar-float {
+  background: rgba(38, 38, 40, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.05),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 /* 自定义滚动条 */
@@ -82,19 +63,35 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-muted-foreground);
+  background: hsl(var(--heroui-default-400));
   border-radius: 3px;
-  opacity: 0.5;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  opacity: 0.8;
+  background: hsl(var(--heroui-default-500));
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* 呼吸灯动画 */
 @keyframes breathe {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .animate-breathe {
@@ -103,12 +100,16 @@ body {
 
 /* 流光效果 */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -125,4 +126,130 @@ body {
 .no-drag {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* Tiptap 编辑器样式 */
+.tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: hsl(var(--heroui-default-400));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap p {
+  margin-bottom: 0.5rem;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap ul {
+  list-style-type: disc;
+}
+
+.tiptap ol {
+  list-style-type: decimal;
+}
+
+.tiptap li {
+  margin-bottom: 0.25rem;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid hsl(var(--heroui-primary));
+  padding-left: 1rem;
+  margin: 0.5rem 0;
+  color: hsl(var(--heroui-default-500));
+  font-style: italic;
+}
+
+.tiptap code {
+  background-color: hsl(var(--heroui-default-100));
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.tiptap pre {
+  background-color: hsl(var(--heroui-default-100));
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+.tiptap pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 1px solid hsl(var(--heroui-divider));
+  margin: 1rem 0;
+}
+
+.tiptap strong {
+  font-weight: 600;
+}
+
+.tiptap em {
+  font-style: italic;
+}
+
+.tiptap s {
+  text-decoration: line-through;
+}
+
+/* 自定义颜色类 - 用于代码增删统计 */
+.text-added {
+  color: hsl(var(--heroui-success));
+}
+
+.text-deleted {
+  color: hsl(var(--heroui-danger));
+}
+
+/* 周视图编辑器样式 */
+.week-day-editor {
+  transition: all 0.2s ease;
+}
+
+.week-day-editor:focus-within {
+  box-shadow: 0 0 0 2px hsl(var(--heroui-primary) / 0.2);
+}
+
+.week-day-editor .tiptap {
+  min-height: 150px;
 }

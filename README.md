@@ -1,6 +1,15 @@
-# Just a Developer
-
-智能开发助手 - 自动整合 Git 提交记录与笔记，通过 AI 生成日报/周报。
+<div align="center">
+  <img src="resources/icon.png" alt="Just a Developer" width="120" />
+  <h1>Just a Developer</h1>
+  <p>智能开发助手 - 自动整合 Git 提交记录与笔记，通过 AI 生成日报/周报。</p>
+  <p>
+    <img src="https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white" alt="Electron" />
+    <img src="https://img.shields.io/badge/React-61DAFB?logo=react&logoColor=0B1120" alt="React" />
+    <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white" alt="Vite" />
+    <img src="https://img.shields.io/badge/Tailwind_CSS-38BDF8?logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  </p>
+</div>
 
 ## 功能特性
 

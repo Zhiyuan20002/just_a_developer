@@ -1,6 +1,6 @@
 {
   "name": "sookool-assistant",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Just a Developer - 智能开发助手，自动整合 Git 提交记录并生成工作报告",
   "main": "./out/main/index.js",
   "author": "SooKool",

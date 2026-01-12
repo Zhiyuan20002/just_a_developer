@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: sookool-assistant
+productName: Just a Developer
 directories:
   buildResources: build
 files:
@@ -22,6 +22,7 @@ nsis:
   createDesktopShortcut: always
 mac:
   icon: resources/icon.png
+  identity: null
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.

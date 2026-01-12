@@ -1,10 +1,10 @@
 {
-  "name": "sookool-assistant",
+  "name": "just_a_developer",
   "version": "0.0.1",
   "description": "Just a Developer - 智能开发助手，自动整合 Git 提交记录并生成工作报告",
   "main": "./out/main/index.js",
   "author": "SooKool",
-  "homepage": "https://github.com/sookool/assistant",
+  "homepage": "https://github.com/Zhiyuan20002/just_a_developer",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -15,10 +15,11 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux",
+    "patch:tailwind-oxide": "node -e \"const fs=require('fs');const path=require('path');const pkgPath=path.join(__dirname,'node_modules/@tailwindcss/oxide/package.json');if(fs.existsSync(pkgPath)){const pkg=JSON.parse(fs.readFileSync(pkgPath,'utf8'));if(pkg.optionalDependencies&&pkg.optionalDependencies['@tailwindcss/oxide-wasm32-wasi']){delete pkg.optionalDependencies['@tailwindcss/oxide-wasm32-wasi'];fs.writeFileSync(pkgPath,JSON.stringify(pkg,null,2)+'\\n');}}const npmCollectorPath=path.join(__dirname,'node_modules/app-builder-lib/out/node-module-collector/NpmNodeModulesCollector.js');if(fs.existsSync(npmCollectorPath)){const src=fs.readFileSync(npmCollectorPath,'utf8');const updated=src.replace(', \\\"--include\\\", \\\"optional\\\"','');if(updated!==src){fs.writeFileSync(npmCollectorPath,updated);}}const collectorPath=path.join(__dirname,'node_modules/app-builder-lib/out/node-module-collector/nodeModulesCollector.js');if(fs.existsSync(collectorPath)){const original=fs.readFileSync(collectorPath,'utf8');let src=original.replace('if (!dependencies.path) {','if (!dependencies.path || !fs.existsSync(dependencies.path)) {');const updated=src.replace(/throw new Error\\(\\\"unable to parse[^\\\"]*reduce\\\"\\);/,'return acc;');if(updated!==original){fs.writeFileSync(collectorPath,updated);}}\"",
+    "build:unpack": "npm run patch:tailwind-oxide && npm run build && electron-builder --dir",
+    "build:win": "npm run patch:tailwind-oxide && npm run build && electron-builder --win",
+    "build:mac": "npm run patch:tailwind-oxide && electron-vite build && electron-builder --mac",
+    "build:linux": "npm run patch:tailwind-oxide && electron-vite build && electron-builder --linux",
     "test": "vitest run",
     "test:watch": "vitest"
   },

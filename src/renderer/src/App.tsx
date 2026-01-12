@@ -59,7 +59,7 @@ function App(): React.JSX.Element {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 标题栏 */}
         <div className="h-11 flex-shrink-0 drag-region flex items-center px-4">
-          <span className="text-sm text-muted-foreground">SooKool Assistant</span>
+          <span className="text-sm text-muted-foreground">Just a Developer</span>
         </div>
 
         <main className="flex-1 flex overflow-hidden">

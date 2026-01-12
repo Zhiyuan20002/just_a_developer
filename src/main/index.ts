@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
 import { join, basename } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -9,7 +9,12 @@ import { getAllRepositories, saveRepositories } from './database/repositories/re
 import { getAllTemplates, saveTemplates } from './database/repositories/template'
 import { getAllNotes, saveNotes } from './database/repositories/note'
 import { getAllWritingExamples, saveWritingExamples } from './database/repositories/writing-example'
-import { getSetting, setSetting, getSettingAsJson, setSettingAsJson } from './database/repositories/settings'
+import {
+  getSetting,
+  setSetting,
+  getSettingAsJson,
+  setSettingAsJson
+} from './database/repositories/settings'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -21,7 +26,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -157,7 +162,10 @@ ipcMain.handle('get-models', async (_event, provider: string) => {
         break
       default: {
         // 检查是否是自定义供应商
-        const customProviders = getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>('customProviders') || []
+        const customProviders =
+          getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>(
+            'customProviders'
+          ) || []
         const custom = customProviders.find((p) => p.id === provider)
         if (custom) {
           // 智能补全模型列表 URL
@@ -520,7 +528,10 @@ ipcMain.on(
         }
         default: {
           // 检查是否是自定义供应商
-          const customProviders = getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>('customProviders') || []
+          const customProviders =
+            getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>(
+              'customProviders'
+            ) || []
           const custom = customProviders.find((p) => p.id === provider)
           if (custom) {
             baseUrl = `${custom.baseUrl}/chat/completions`
@@ -689,6 +700,13 @@ app.whenReady().then(() => {
   initDatabase()
 
   electronApp.setAppUserModelId('com.sookool.assistant')
+
+  if (process.platform === 'darwin') {
+    const appIcon = nativeImage.createFromPath(icon)
+    if (!appIcon.isEmpty()) {
+      app.dock?.setIcon(appIcon)
+    }
+  }
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

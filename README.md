@@ -1,22 +1,24 @@
-# SooKool Assistant
+# Just a Developer
 
-智能开发助手 - 自动整合 Git 提交记录并通过 AI 生成工作报告
+智能开发助手 - 自动整合 Git 提交记录与笔记，通过 AI 生成日报/周报。
 
 ## 功能特性
 
-- 🔗 支持本地 Git 仓库导入
-- 📊 可视化展示提交记录和代码统计
-- 🤖 AI 驱动的报告生成（支持 OpenAI/Claude/DeepSeek/Ollama）
-- 📝 内置多种报告模版（日报、周报）
-- 🎨 Neo-Glassmorphism 设计风格，支持暗黑/亮色主题自动切换
-- 📤 支持导出 Markdown 文件
+- 本地 Git 仓库管理，支持别名与项目描述
+- 仪表盘按日期与作者筛选提交，统计增删行数
+- 选择提交与笔记生成报告，支持一键复制与导出 Markdown
+- AI 报告生成支持 OpenAI/Claude/DeepSeek/Ollama 及自定义兼容接口
+- 模版中心支持日报/周报模版维护与写作示例训练
+- 笔记中心提供日/周视图、周/月日历与 Markdown 编辑
+- 设置中可配置模型、系统提示词与主题（亮色/暗色/跟随系统）
 
 ## 技术栈
 
-- **框架**: Electron + React 18 + TypeScript
+- **框架**: Electron + React 19 + TypeScript
 - **构建工具**: Electron-Vite
-- **UI**: Tailwind CSS + Radix UI
+- **UI**: Tailwind CSS + Radix UI + HeroUI
 - **状态管理**: Zustand
+- **数据存储**: Electron Store + SQLite (better-sqlite3)
 - **Git 操作**: Simple-git
 - **测试**: Vitest
 
@@ -41,12 +43,12 @@ npm run build
 
 ## 使用说明
 
-1. 启动应用后，点击侧边栏的「项目库」图标
-2. 点击「添加本地仓库」选择包含 .git 的文件夹
-3. 点击「刷新提交」获取最近的提交记录
-4. 返回「仪表盘」查看提交统计
-5. 在右侧「生成编辑器」中选择提交并生成报告
-6. 可以编辑生成的内容，然后复制或导出
+1. 进入「项目库」添加本地 Git 仓库，并填写别名与项目描述
+2. 在「仪表盘」刷新提交记录，并按时间/作者筛选
+3. 在「笔记」中按日或按周记录工作内容
+4. 在「模版中心」维护日报/周报模版并补充写作示例
+5. 回到「仪表盘」选择提交与笔记，在右侧生成器中生成报告
+6. 对生成内容进行编辑后复制或导出 Markdown
 
 ## 许可证
 

@@ -316,7 +316,7 @@ export function Composer() {
         </div>
 
         {generatedContent && (
-          <Card className="bg-content1/50">
+          <Card className="card-flat">
             <CardHeader className="py-3 flex justify-between items-center">
               <p className="text-sm font-medium">生成结果</p>
               <div className="flex gap-1">

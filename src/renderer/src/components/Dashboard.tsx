@@ -2,7 +2,6 @@ import {
   GitCommit,
   Plus,
   Minus,
-  Calendar,
   RefreshCw,
   User,
   ChevronDown,
@@ -18,7 +17,9 @@ import {
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
-  DropdownItem
+  DropdownItem,
+  Tabs,
+  Tab
 } from '@heroui/react'
 import { useAppStore, Commit } from '@/stores/app-store'
 import { useState, useMemo, useEffect, useCallback } from 'react'
@@ -47,8 +48,8 @@ export function Dashboard() {
 
   const [dateFilter, setDateFilter] = useState<DateFilter>('week')
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [commitsExpanded, setCommitsExpanded] = useState(true)
-  const [notesExpanded, setNotesExpanded] = useState(true)
+  const [commitsExpanded, setCommitsExpanded] = useState(false)
+  const [notesExpanded, setNotesExpanded] = useState(false)
 
   // 刷新提交记录
   const refreshCommits = useCallback(async () => {
@@ -241,10 +242,6 @@ export function Dashboard() {
       {/* 顶部筛选栏 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Calendar className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-medium">提交记录</h2>
-        </div>
-        <div className="flex items-center gap-3">
           {/* 用户筛选 */}
           <Dropdown>
             <DropdownTrigger>
@@ -268,19 +265,17 @@ export function Dashboard() {
           </Dropdown>
 
           {/* 日期筛选 */}
-          <div className="flex items-center gap-1 bg-default-100 rounded-lg p-1">
-            {(Object.keys(filterLabels) as DateFilter[]).map((filter) => (
-              <Button
-                key={filter}
-                size="sm"
-                variant={dateFilter === filter ? 'solid' : 'light'}
-                color={dateFilter === filter ? 'primary' : 'default'}
-                onPress={() => handleFilterChange(filter)}
-              >
-                {filterLabels[filter]}
-              </Button>
-            ))}
-          </div>
+          <Tabs
+            size="sm"
+            selectedKey={dateFilter}
+            onSelectionChange={(key) => handleFilterChange(key as DateFilter)}
+            aria-label="日期筛选"
+          >
+            <Tab key="today" title="今日" />
+            <Tab key="week" title="本周" />
+            <Tab key="month" title="本月" />
+            <Tab key="all" title="全部" />
+          </Tabs>
 
           {/* 刷新按钮 */}
           <Button
@@ -293,11 +288,26 @@ export function Dashboard() {
             刷新
           </Button>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            color="primary"
+            size="sm"
+            isDisabled={!hasFilteredContent}
+            startContent={<CheckCheck className="w-4 h-4" />}
+            onPress={selectAllFiltered}
+          >
+            一键全选
+          </Button>
+          <Button variant="bordered" size="sm" onPress={clearAllSelections}>
+            清除选中
+          </Button>
+        </div>
       </div>
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <Card className="bg-content1/50 backdrop-blur">
+      {/* 代码统计卡片 */}
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <Card className="card-flat">
           <CardHeader className="pb-0">
             <p className="text-sm text-default-500">{filterLabels[dateFilter]}提交</p>
           </CardHeader>
@@ -309,7 +319,7 @@ export function Dashboard() {
           </CardBody>
         </Card>
 
-        <Card className="bg-content1/50 backdrop-blur">
+        <Card className="card-flat">
           <CardHeader className="pb-0">
             <p className="text-sm text-default-500">新增代码</p>
           </CardHeader>
@@ -322,7 +332,7 @@ export function Dashboard() {
           </CardBody>
         </Card>
 
-        <Card className="bg-content1/50 backdrop-blur">
+        <Card className="card-flat">
           <CardHeader className="pb-0">
             <p className="text-sm text-default-500">删除代码</p>
           </CardHeader>
@@ -334,8 +344,11 @@ export function Dashboard() {
             </div>
           </CardBody>
         </Card>
+      </div>
 
-        <Card className="bg-content1/50 backdrop-blur">
+      {/* 笔记统计卡片 */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <Card className="card-flat">
           <CardHeader className="pb-0">
             <p className="text-sm text-default-500">{filterLabels[dateFilter]}笔记</p>
           </CardHeader>
@@ -348,7 +361,7 @@ export function Dashboard() {
           </CardBody>
         </Card>
 
-        <Card className="bg-content1/50 backdrop-blur">
+        <Card className="card-flat">
           <CardHeader className="pb-0">
             <p className="text-sm text-default-500">笔记行数</p>
           </CardHeader>
@@ -361,24 +374,8 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* 一键全选按钮 */}
-      <div className="flex items-center justify-end gap-2 mb-4">
-        <Button
-          color="primary"
-          size="sm"
-          isDisabled={!hasFilteredContent}
-          startContent={<CheckCheck className="w-4 h-4" />}
-          onPress={selectAllFiltered}
-        >
-          一键全选
-        </Button>
-        <Button variant="bordered" size="sm" onPress={clearAllSelections}>
-          清除选中
-        </Button>
-      </div>
-
       {/* Commit 列表 */}
-      <Card className="bg-content1/50 backdrop-blur mb-6">
+      <Card className="card-flat mb-6">
         <CardHeader className="flex justify-between items-center py-3">
           <div className="flex items-center gap-2">
             <Button
@@ -465,7 +462,7 @@ export function Dashboard() {
       </Card>
 
       {/* 笔记列表 */}
-      <Card className="bg-content1/50 backdrop-blur">
+      <Card className="card-flat">
         <CardHeader className="flex justify-between items-center py-3">
           <div className="flex items-center gap-2">
             <Button

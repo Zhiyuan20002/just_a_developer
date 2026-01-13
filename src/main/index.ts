@@ -1,18 +1,18 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
-import { join, basename } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { basename, join } from 'path'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { simpleGit, SimpleGit } from 'simple-git'
-import { readdirSync, statSync, unlinkSync, existsSync } from 'fs'
-import { initDatabase, closeDatabase } from './database'
+import { existsSync, readdirSync, statSync, unlinkSync } from 'fs'
+import { closeDatabase, initDatabase } from './database'
 import { getAllRepositories, saveRepositories } from './database/repositories/repository'
 import { getAllTemplates, saveTemplates } from './database/repositories/template'
 import { getAllNotes, saveNotes } from './database/repositories/note'
 import { getAllWritingExamples, saveWritingExamples } from './database/repositories/writing-example'
 import {
   getSetting,
-  setSetting,
   getSettingAsJson,
+  setSetting,
   setSettingAsJson
 } from './database/repositories/settings'
 

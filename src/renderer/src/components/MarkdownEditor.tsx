@@ -1,6 +1,8 @@
 import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
 import { Markdown } from 'tiptap-markdown'
 import { useEffect, useRef } from 'react'
 import { EditorToolbar } from './EditorToolbar'
@@ -28,13 +30,12 @@ export function MarkdownEditor({
   showToolbar = true,
   onEditorReady,
   onFocus,
-  minHeight = '400px',
+  minHeight = '100%',
   className = ''
 }: MarkdownEditorProps) {
   const isUpdatingRef = useRef(false)
   const onEditorReadyRef = useRef(onEditorReady)
 
-  // 更新 ref 以避免重新创建 editor
   useEffect(() => {
     onEditorReadyRef.current = onEditorReady
   }, [onEditorReady])
@@ -48,6 +49,10 @@ export function MarkdownEditor({
       }),
       Placeholder.configure({
         placeholder: placeholder || '开始编写...'
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true
       }),
       Markdown.configure({
         html: false,
@@ -66,13 +71,12 @@ export function MarkdownEditor({
     },
     editorProps: {
       attributes: {
-        class: `tiptap prose prose-sm dark:prose-invert max-w-none focus:outline-none p-4 overflow-auto`,
+        class: `tiptap prose prose-sm dark:prose-invert max-w-none focus:outline-none px-4 py-3 overflow-auto h-full`,
         style: `min-height: ${minHeight}`
       }
     }
   })
 
-  // 当 editor 准备好时，通知父组件
   useEffect(() => {
     if (editor) {
       onEditorReadyRef.current?.(editor)
@@ -92,9 +96,15 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className={`border border-divider rounded-lg overflow-hidden bg-content1 ${className}`}>
-      {showToolbar && <EditorToolbar editor={editor} />}
-      <EditorContent editor={editor} />
+    <div className={`flex flex-col h-full overflow-hidden ${className}`}>
+      {showToolbar && (
+        <div className="flex-shrink-0 border-b border-divider">
+          <EditorToolbar editor={editor} />
+        </div>
+      )}
+      <div className="flex-1 overflow-auto">
+        <EditorContent editor={editor} className="h-full" />
+      </div>
     </div>
   )
 }

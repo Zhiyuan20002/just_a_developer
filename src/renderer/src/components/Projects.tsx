@@ -111,7 +111,7 @@ export function Projects() {
       </p>
 
       {repositories.length === 0 ? (
-        <Card className="bg-content1/50 backdrop-blur">
+        <Card className="card-flat">
           <CardBody className="py-12">
             <div className="text-center text-default-500">
               <FolderGit2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -125,7 +125,7 @@ export function Projects() {
           {repositories.map((repo) => (
             <Card
               key={repo.id}
-              className={`bg-content1/50 backdrop-blur transition-all duration-200 ${
+              className={`card-flat transition-all duration-200 ${
                 repo.selected ? 'ring-2 ring-primary' : ''
               }`}
             >

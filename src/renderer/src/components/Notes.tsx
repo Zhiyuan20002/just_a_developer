@@ -1,13 +1,39 @@
-import { ChevronLeft, ChevronRight, Save, FileText } from 'lucide-react'
-import { Card, CardHeader, CardBody, Button, Tabs, Tab } from '@heroui/react'
-import { useAppStore } from '@/stores/app-store'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  GitCommit,
+  RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  User
+} from 'lucide-react'
+import {
+  Card,
+  CardHeader,
+  CardBody,
+  Button,
+  Tabs,
+  Tab,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem
+} from '@heroui/react'
+import { useAppStore, Commit } from '@/stores/app-store'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { MarkdownEditor, Editor } from './MarkdownEditor'
 import { EditorToolbar } from './EditorToolbar'
 import { getLunarInfo, getLunarDisplayText, getMonthDays } from '@/lib/lunar'
 
-type CalendarViewMode = 'week' | 'month'
 type NoteViewMode = 'day' | 'week'
+
+const formatDate = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const getWeekStart = (date: Date): Date => {
   const d = new Date(date)
@@ -16,13 +42,6 @@ const getWeekStart = (date: Date): Date => {
   d.setDate(diff)
   d.setHours(0, 0, 0, 0)
   return d
-}
-
-const formatDate = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 const getWeekDays = (weekStart: Date): Date[] => {
@@ -39,41 +58,98 @@ const weekDayLabels = ['一', '二', '三', '四', '五', '六', '日']
 const weekDayFullLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 export function Notes() {
-  const { selectedNoteDate, setSelectedNoteDate, addOrUpdateNote, getNoteByDate } = useAppStore()
+  const {
+    selectedNoteDate,
+    setSelectedNoteDate,
+    addOrUpdateNote,
+    getNoteByDate,
+    commits,
+    setCommits,
+    selectedCommits,
+    toggleCommit,
+    repositories,
+    selectedAuthor,
+    setSelectedAuthor
+  } = useAppStore()
 
-  // 日历视图模式（周/月）
-  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('week')
-  // 笔记视图模式（日/周）
-  const [noteViewMode, setNoteViewMode] = useState<NoteViewMode>('day')
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()))
   const [currentMonth, setCurrentMonth] = useState(() => new Date())
+  const [noteViewMode, setNoteViewMode] = useState<NoteViewMode>('day')
+  const [commitsExpanded, setCommitsExpanded] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // 日视图编辑状态
+  // 日视图状态
   const [editContent, setEditContent] = useState('')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  // 周视图编辑状态
+  // 周视图状态
   const [weekContents, setWeekContents] = useState<Record<string, string>>({})
   const [weekUnsavedChanges, setWeekUnsavedChanges] = useState<Record<string, boolean>>({})
   const [activeEditorIndex, setActiveEditorIndex] = useState(0)
   const weekEditorsRef = useRef<(Editor | null)[]>([])
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null)
 
-  const weekDays = useMemo(() => getWeekDays(currentWeekStart), [currentWeekStart])
   const monthWeeks = useMemo(
     () => getMonthDays(currentMonth.getFullYear(), currentMonth.getMonth()),
     [currentMonth]
   )
   const todayStr = formatDate(new Date())
 
-  // 获取当前选中日期所在周的起始日
+  // 获取选中日期所在周
   const selectedWeekStart = useMemo(() => {
     if (!selectedNoteDate) return getWeekStart(new Date())
     return getWeekStart(new Date(selectedNoteDate))
   }, [selectedNoteDate])
 
-  // 周视图显示的日期
   const noteWeekDays = useMemo(() => getWeekDays(selectedWeekStart), [selectedWeekStart])
+
+  const authors = useMemo(() => {
+    const authorSet = new Set(commits.map((c) => c.author))
+    return Array.from(authorSet).sort()
+  }, [commits])
+
+  const refreshCommits = useCallback(async () => {
+    const selectedRepos = repositories.filter((repo) => repo.selected)
+    if (selectedRepos.length === 0) return
+
+    setIsRefreshing(true)
+    try {
+      const allCommits: Commit[] = []
+      for (const repo of selectedRepos) {
+        const result = await window.electron.ipcRenderer.invoke('get-commits', repo.path)
+        if (result.commits) {
+          const commitsWithRepo = result.commits.map((commit: Commit) => ({
+            ...commit,
+            repoId: repo.id,
+            repoName: repo.alias || repo.name,
+            repoDescription: repo.description
+          }))
+          allCommits.push(...commitsWithRepo)
+        }
+      }
+      allCommits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      setCommits(allCommits)
+    } catch (error) {
+      console.error('刷新提交失败:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [repositories, setCommits])
+
+  const selectedDateCommits = useMemo(() => {
+    if (!selectedNoteDate) return []
+    const [year, month, day] = selectedNoteDate.split('-').map(Number)
+    const start = new Date(year, month - 1, day)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+
+    return commits
+      .filter((commit) => {
+        if (selectedAuthor && commit.author !== selectedAuthor) return false
+        const commitDate = new Date(commit.date)
+        return commitDate >= start && commitDate < end
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [commits, selectedAuthor, selectedNoteDate])
 
   useEffect(() => {
     if (!selectedNoteDate) {
@@ -104,43 +180,20 @@ export function Notes() {
     }
   }, [noteViewMode, noteWeekDays, getNoteByDate])
 
-  // 切换笔记视图模式时保存
-  useEffect(() => {
-    return () => {
-      // 组件卸载或视图切换时自动保存
-    }
-  }, [noteViewMode])
-
   const goToPrev = () => {
-    if (calendarViewMode === 'week') {
-      const newStart = new Date(currentWeekStart)
-      newStart.setDate(newStart.getDate() - 7)
-      setCurrentWeekStart(newStart)
-    } else {
-      const newMonth = new Date(currentMonth)
-      newMonth.setMonth(newMonth.getMonth() - 1)
-      setCurrentMonth(newMonth)
-    }
+    const newMonth = new Date(currentMonth)
+    newMonth.setMonth(newMonth.getMonth() - 1)
+    setCurrentMonth(newMonth)
   }
 
   const goToNext = () => {
-    if (calendarViewMode === 'week') {
-      const newStart = new Date(currentWeekStart)
-      newStart.setDate(newStart.getDate() + 7)
-      setCurrentWeekStart(newStart)
-    } else {
-      const newMonth = new Date(currentMonth)
-      newMonth.setMonth(newMonth.getMonth() + 1)
-      setCurrentMonth(newMonth)
-    }
+    const newMonth = new Date(currentMonth)
+    newMonth.setMonth(newMonth.getMonth() + 1)
+    setCurrentMonth(newMonth)
   }
 
-  const goToCurrent = () => {
-    if (calendarViewMode === 'week') {
-      setCurrentWeekStart(getWeekStart(new Date()))
-    } else {
-      setCurrentMonth(new Date())
-    }
+  const goToToday = () => {
+    setCurrentMonth(new Date())
     setSelectedNoteDate(todayStr)
   }
 
@@ -174,88 +227,22 @@ export function Notes() {
 
   const handleSelectDay = (date: Date) => {
     const dateStr = formatDate(date)
-    if (hasUnsavedChanges && selectedNoteDate) {
+    // 切换日期前自动保存
+    if (noteViewMode === 'day' && hasUnsavedChanges && selectedNoteDate) {
       addOrUpdateNote(selectedNoteDate, editContent)
     }
     setSelectedNoteDate(dateStr)
+    // 如果点击的日期不在当前月，自动翻月
+    if (
+      date.getMonth() !== currentMonth.getMonth() ||
+      date.getFullYear() !== currentMonth.getFullYear()
+    ) {
+      setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
   }
 
-  const hasNote = (date: Date): boolean => {
-    const note = getNoteByDate(formatDate(date))
-    return !!note && note.content.trim().length > 0
-  }
-
-  const stats = useMemo(() => {
-    const lines = editContent.split('\n').length
-    const chars = editContent.length
-    return { lines, chars }
-  }, [editContent])
-
-  const weekRangeText = useMemo(() => {
-    const weekEnd = new Date(currentWeekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    const startMonth = currentWeekStart.getMonth() + 1
-    const startDay = currentWeekStart.getDate()
-    const endMonth = weekEnd.getMonth() + 1
-    const endDay = weekEnd.getDate()
-    const year = currentWeekStart.getFullYear()
-
-    if (startMonth === endMonth) {
-      return `${year}年${startMonth}月${startDay}日 - ${endDay}日`
-    }
-    return `${year}年${startMonth}月${startDay}日 - ${endMonth}月${endDay}日`
-  }, [currentWeekStart])
-
-  const monthText = useMemo(() => {
-    const year = currentMonth.getFullYear()
-    const month = currentMonth.getMonth() + 1
-    return `${year}年${month}月`
-  }, [currentMonth])
-
-  const isCurrentPeriod = useMemo(() => {
-    if (calendarViewMode === 'week') {
-      const thisWeekStart = getWeekStart(new Date())
-      return currentWeekStart.getTime() === thisWeekStart.getTime()
-    } else {
-      const now = new Date()
-      return (
-        currentMonth.getFullYear() === now.getFullYear() &&
-        currentMonth.getMonth() === now.getMonth()
-      )
-    }
-  }, [calendarViewMode, currentWeekStart, currentMonth])
-
-  const selectedDateDisplay = useMemo(() => {
-    if (!selectedNoteDate) return ''
-    const date = new Date(selectedNoteDate)
-    const lunar = getLunarInfo(date)
-    const weekday = date.toLocaleDateString('zh-CN', { weekday: 'long' })
-    const lunarText = lunar.festival || lunar.solarTerm || `${lunar.lunarMonth}${lunar.lunarDay}`
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${weekday} · ${lunarText}`
-  }, [selectedNoteDate])
-
-  // 周视图的周范围显示
-  const noteWeekRangeText = useMemo(() => {
-    const weekEnd = new Date(selectedWeekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    const startMonth = selectedWeekStart.getMonth() + 1
-    const startDay = selectedWeekStart.getDate()
-    const endMonth = weekEnd.getMonth() + 1
-    const endDay = weekEnd.getDate()
-    const year = selectedWeekStart.getFullYear()
-
-    if (startMonth === endMonth) {
-      return `${year}年${startMonth}月${startDay}日 - ${endDay}日`
-    }
-    return `${year}年${startMonth}月${startDay}日 - ${endMonth}月${endDay}日`
-  }, [selectedWeekStart])
-
-  const handleCalendarViewModeChange = (key: React.Key) => {
-    setCalendarViewMode(key as CalendarViewMode)
-  }
-
-  const handleNoteViewModeChange = (key: React.Key) => {
-    // 切换前保存当前视图的更改
+  const handleViewModeChange = (key: React.Key) => {
+    // 切换前保存
     if (noteViewMode === 'day' && hasUnsavedChanges && selectedNoteDate) {
       addOrUpdateNote(selectedNoteDate, editContent)
       setHasUnsavedChanges(false)
@@ -282,54 +269,92 @@ export function Notes() {
     setActiveEditor(weekEditorsRef.current[index])
   }
 
-  // 计算周视图是否有未保存的更改
+  const hasNote = (date: Date): boolean => {
+    const note = getNoteByDate(formatDate(date))
+    return !!note && note.content.trim().length > 0
+  }
+
+  const stats = useMemo(() => {
+    const lines = editContent.split('\n').length
+    const chars = editContent.length
+    return { lines, chars }
+  }, [editContent])
+
+  const monthText = useMemo(() => {
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth() + 1
+    return `${year}年${month}月`
+  }, [currentMonth])
+
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date()
+    return (
+      currentMonth.getFullYear() === now.getFullYear() && currentMonth.getMonth() === now.getMonth()
+    )
+  }, [currentMonth])
+
+  const selectedDateDisplay = useMemo(() => {
+    if (!selectedNoteDate) return ''
+    const date = new Date(selectedNoteDate)
+    const lunar = getLunarInfo(date)
+    const weekday = date.toLocaleDateString('zh-CN', { weekday: 'long' })
+    const lunarText = lunar.festival || lunar.solarTerm || `${lunar.lunarMonth}${lunar.lunarDay}`
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${weekday} · ${lunarText}`
+  }, [selectedNoteDate])
+
+  const weekRangeText = useMemo(() => {
+    const weekEnd = new Date(selectedWeekStart)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+    const startMonth = selectedWeekStart.getMonth() + 1
+    const startDay = selectedWeekStart.getDate()
+    const endMonth = weekEnd.getMonth() + 1
+    const endDay = weekEnd.getDate()
+
+    if (startMonth === endMonth) {
+      return `${startMonth}月${startDay}日 - ${endDay}日`
+    }
+    return `${startMonth}月${startDay}日 - ${endMonth}月${endDay}日`
+  }, [selectedWeekStart])
+
   const hasWeekUnsavedChanges = useMemo(() => {
     return Object.values(weekUnsavedChanges).some(Boolean)
   }, [weekUnsavedChanges])
 
-  const renderDayCell = (
-    day: Date,
-    isSelected: boolean,
-    isToday: boolean,
-    dayHasNote: boolean,
-    isCurrentMonth: boolean = true,
-    compact: boolean = false
-  ) => {
+  const renderDayCell = (day: Date) => {
+    const dateStr = formatDate(day)
+    const isSelected = selectedNoteDate === dateStr
+    const isToday = dateStr === todayStr
+    const dayHasNote = hasNote(day)
+    const isInCurrentMonth = day.getMonth() === currentMonth.getMonth()
     const lunarInfo = getLunarInfo(day)
     const lunarText = getLunarDisplayText(day)
     const isFestival = !!lunarInfo.festival || !!lunarInfo.solarTerm
 
     return (
       <button
-        key={formatDate(day)}
+        key={dateStr}
         type="button"
         onClick={() => handleSelectDay(day)}
-        className={`relative rounded-lg transition-all duration-200 text-center ${
-          compact ? 'p-1.5' : 'p-3'
-        } ${
+        className={`relative rounded-lg transition-all duration-200 text-center p-2 ${
           isSelected
-            ? 'bg-primary text-primary-foreground shadow-lg'
+            ? 'bg-primary text-primary-foreground'
             : isToday
               ? 'bg-primary/10 hover:bg-primary/20'
-              : !isCurrentMonth
+              : !isInCurrentMonth
                 ? 'opacity-40 hover:opacity-60 hover:bg-default-100'
                 : 'hover:bg-default-100'
         }`}
       >
-        <p
-          className={`font-semibold ${compact ? 'text-sm' : 'text-lg'} ${
-            isSelected ? 'text-primary-foreground' : ''
-          }`}
-        >
+        <p className={`font-medium ${isSelected ? 'text-primary-foreground' : ''}`}>
           {day.getDate()}
         </p>
         <p
-          className={`${compact ? 'text-[10px]' : 'text-xs'} mt-0.5 truncate ${
+          className={`text-[10px] mt-0.5 truncate ${
             isSelected
               ? 'text-primary-foreground/80'
               : isFestival
                 ? 'text-primary'
-                : 'text-default-500'
+                : 'text-default-400'
           }`}
         >
           {lunarText}
@@ -337,7 +362,9 @@ export function Notes() {
         {lunarInfo.isHoliday && (
           <span
             className={`absolute top-0.5 right-0.5 text-[10px] px-1 rounded ${
-              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-success/20 text-success'
+              isSelected
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-success/20 text-success'
             }`}
           >
             休
@@ -346,7 +373,9 @@ export function Notes() {
         {lunarInfo.isWorkday && (
           <span
             className={`absolute top-0.5 right-0.5 text-[10px] px-1 rounded ${
-              isSelected ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-warning/20 text-warning'
+              isSelected
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-warning/20 text-warning'
             }`}
           >
             班
@@ -354,7 +383,7 @@ export function Notes() {
         )}
         {dayHasNote && (
           <div
-            className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
+            className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
               isSelected ? 'bg-primary-foreground' : 'bg-primary'
             }`}
           />
@@ -363,7 +392,6 @@ export function Notes() {
     )
   }
 
-  // 渲染周视图中的单日编辑器
   const renderWeekDayEditor = (day: Date, index: number) => {
     const dateStr = formatDate(day)
     const isToday = dateStr === todayStr
@@ -375,27 +403,29 @@ export function Notes() {
     return (
       <div
         key={dateStr}
-        className={`week-day-editor rounded-lg border transition-all ${
-          isActive ? 'border-primary shadow-sm' : 'border-divider'
+        className={`rounded-lg border transition-all ${
+          isActive ? 'border-primary' : 'border-divider'
         }`}
       >
         <div
           className={`flex items-center justify-between px-3 py-2 border-b ${
-            isActive ? 'border-primary/30 bg-primary/5' : 'border-divider bg-default-50'
+            isActive ? 'border-primary/30 bg-primary/5' : 'border-divider'
           }`}
         >
           <div className="flex items-center gap-2">
-            <span className={`font-medium ${isToday ? 'text-primary' : ''}`}>
+            <span className={`font-medium text-sm ${isToday ? 'text-primary' : ''}`}>
               {weekDayFullLabels[index]}
             </span>
-            <span className="text-default-500 text-sm">
+            <span className="text-default-400 text-xs">
               {day.getMonth() + 1}/{day.getDate()}
             </span>
-            <span className="text-default-400 text-xs">{lunarText}</span>
+            <span className="text-default-300 text-xs">{lunarText}</span>
             {hasChanges && <span className="text-warning text-xs">*</span>}
           </div>
           {isToday && (
-            <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">今天</span>
+            <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">
+              今天
+            </span>
           )}
         </div>
         <MarkdownEditor
@@ -404,118 +434,176 @@ export function Notes() {
           showToolbar={false}
           onEditorReady={(editor) => handleEditorReady(index, editor)}
           onFocus={() => handleEditorFocus(index)}
-          minHeight="150px"
-          placeholder={`${weekDayFullLabels[index]}的笔记...`}
-          className="border-0 rounded-none rounded-b-lg"
+          minHeight="120px"
+          placeholder={`${weekDayFullLabels[index]}...`}
         />
       </div>
     )
   }
 
   return (
-    <div className="flex-1 p-6 overflow-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <FileText className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-medium">笔记</h2>
-        </div>
-      </div>
-
-      <Card className="bg-content1/50 backdrop-blur mb-6">
-        <CardHeader className="flex justify-between items-center pb-2">
-          <div className="flex items-center gap-2">
-            <Button isIconOnly size="sm" variant="light" onPress={goToPrev}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button isIconOnly size="sm" variant="light" onPress={goToNext}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-            <p className="text-base font-medium ml-2">
-              {calendarViewMode === 'week' ? weekRangeText : monthText}
-            </p>
-            {!isCurrentPeriod && (
-              <Button size="sm" variant="flat" onPress={goToCurrent}>
+    <div className="flex-1 p-6 flex gap-6 overflow-hidden">
+      <div className="flex-1 flex flex-col gap-6 min-w-0">
+        {/* 左侧日历区域 */}
+        <Card className="card-flat flex-1 h-fit">
+          <CardHeader className="flex justify-between items-center pb-2">
+            <div className="flex items-center gap-1">
+              <Button isIconOnly size="sm" variant="light" onPress={goToPrev}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <p className="text-base font-medium px-2 min-w-[100px] text-center">{monthText}</p>
+              <Button isIconOnly size="sm" variant="light" onPress={goToNext}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            {!isCurrentMonth && (
+              <Button size="sm" variant="flat" onPress={goToToday}>
                 今日
               </Button>
             )}
-          </div>
-          <Tabs
-            size="sm"
-            selectedKey={calendarViewMode}
-            onSelectionChange={handleCalendarViewModeChange}
-            aria-label="日历视图切换"
-          >
-            <Tab key="week" title="周" />
-            <Tab key="month" title="月" />
-          </Tabs>
-        </CardHeader>
-        <CardBody className="pt-0">
-          {calendarViewMode === 'week' ? (
-            <div className="grid grid-cols-7 gap-2">
-              {weekDays.map((day, index) => {
-                const dateStr = formatDate(day)
-                const isSelected = selectedNoteDate === dateStr
-                const isToday = dateStr === todayStr
-                const dayHasNote = hasNote(day)
-
-                return (
-                  <div key={dateStr} className="flex flex-col items-center">
-                    <p className="text-xs text-default-500 mb-1">{weekDayLabels[index]}</p>
-                    {renderDayCell(day, isSelected, isToday, dayHasNote, true, false)}
-                  </div>
-                )
-              })}
+          </CardHeader>
+          <CardBody className="pt-0">
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {weekDayLabels.map((label) => (
+                <p key={label} className="text-xs text-default-400 text-center py-1">
+                  {label}
+                </p>
+              ))}
             </div>
-          ) : (
-            <div>
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {weekDayLabels.map((label) => (
-                  <p key={label} className="text-xs text-default-500 text-center py-1">
-                    {label}
-                  </p>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {monthWeeks.flat().map((day) => {
-                  const dateStr = formatDate(day)
-                  const isSelected = selectedNoteDate === dateStr
-                  const isToday = dateStr === todayStr
-                  const dayHasNote = hasNote(day)
-                  const isCurrentMonth = day.getMonth() === currentMonth.getMonth()
-
-                  return renderDayCell(day, isSelected, isToday, dayHasNote, isCurrentMonth, true)
-                })}
-              </div>
+            <div className="grid grid-cols-7 gap-1">
+              {monthWeeks.flat().map((day) => renderDayCell(day))}
             </div>
+          </CardBody>
+        </Card>
+
+        {/* 提交记录区域 */}
+        <Card className="card-flat">
+          <CardHeader className="flex justify-between items-center py-3">
+            <div className="flex items-center gap-2">
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                onPress={() => setCommitsExpanded(!commitsExpanded)}
+              >
+                {commitsExpanded ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </Button>
+              <p className="text-base font-medium">
+                提交记录
+                <span className="text-sm font-normal text-default-500 ml-2">
+                  ({selectedDateCommits.length} 条)
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Dropdown>
+                <DropdownTrigger>
+                  <Button variant="bordered" size="sm" startContent={<User className="w-4 h-4" />}>
+                    {selectedAuthor || '全部用户'}
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownTrigger>
+                <DropdownMenu
+                  aria-label="作者筛选"
+                  selectionMode="single"
+                  selectedKeys={selectedAuthor ? [selectedAuthor] : ['all']}
+                  onSelectionChange={(keys) => {
+                    const selected = Array.from(keys)[0] as string
+                    setSelectedAuthor(selected === 'all' ? null : selected)
+                  }}
+                  items={[
+                    { key: 'all', label: '全部用户' },
+                    ...authors.map((author) => ({
+                      key: author,
+                      label: author
+                    }))
+                  ]}
+                >
+                  {(item) => <DropdownItem key={item.key}>{item.label}</DropdownItem>}
+                </DropdownMenu>
+              </Dropdown>
+              <Button
+                variant="bordered"
+                size="sm"
+                isLoading={isRefreshing}
+                startContent={!isRefreshing && <RefreshCw className="w-4 h-4" />}
+                onPress={refreshCommits}
+              >
+                刷新
+              </Button>
+            </div>
+          </CardHeader>
+          {commitsExpanded && (
+            <CardBody className="pt-0">
+              {selectedDateCommits.length === 0 ? (
+                <div className="text-center py-10 text-default-500">
+                  <GitCommit className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                  <p>暂无提交记录</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedDateCommits.map((commit) => (
+                    <div
+                      key={commit.hash}
+                      onClick={() => toggleCommit(commit.hash)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
+                        selectedCommits.includes(commit.hash)
+                          ? 'border-primary bg-primary/5'
+                          : 'border-transparent hover:bg-default-100'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{commit.message}</p>
+                          <p className="text-xs text-default-500 mt-1">
+                            {commit.author} ·{' '}
+                            {new Date(commit.date).toLocaleTimeString('zh-CN', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-success">+{commit.additions}</span>
+                          <span className="text-danger">-{commit.deletions}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardBody>
           )}
-        </CardBody>
-      </Card>
+        </Card>
+      </div>
 
-      <Card className="bg-content1/50 backdrop-blur">
-        <CardHeader className="flex justify-between items-center py-3">
+      {/* 右侧编辑器区域 */}
+      <Card className="card-flat flex-1 flex flex-col overflow-hidden min-w-0">
+        <CardHeader className="flex justify-between items-center py-3 flex-shrink-0">
           <div>
-            {noteViewMode === 'day' ? (
-              <>
-                <p className="text-base font-medium">{selectedDateDisplay}</p>
-                <p className="text-xs text-default-500 mt-1">
+            <p className="text-base font-medium">
+              {noteViewMode === 'day' ? selectedDateDisplay : weekRangeText}
+            </p>
+            <p className="text-xs text-default-400 mt-1">
+              {noteViewMode === 'day' ? (
+                <>
                   {stats.chars} 字 · {stats.lines} 行
                   {hasUnsavedChanges && <span className="text-warning ml-2">· 未保存</span>}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-medium">{noteWeekRangeText}</p>
-                <p className="text-xs text-default-500 mt-1">
-                  {hasWeekUnsavedChanges && <span className="text-warning">有未保存的更改</span>}
-                </p>
-              </>
-            )}
+                </>
+              ) : (
+                hasWeekUnsavedChanges && <span className="text-warning">有未保存的更改</span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <Tabs
               size="sm"
               selectedKey={noteViewMode}
-              onSelectionChange={handleNoteViewModeChange}
+              onSelectionChange={handleViewModeChange}
               aria-label="笔记视图切换"
             >
               <Tab key="day" title="日" />
@@ -532,21 +620,21 @@ export function Notes() {
             </Button>
           </div>
         </CardHeader>
-        <CardBody className="pt-0">
+        <CardBody className="pt-0 flex-1 overflow-hidden">
           {noteViewMode === 'day' ? (
             <MarkdownEditor
               content={editContent}
               onChange={handleContentChange}
-              placeholder="在这里记录你的笔记..."
+              placeholder="记录今天的想法..."
             />
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col h-full overflow-hidden">
               {/* 统一工具栏 */}
-              <div className="border border-divider rounded-lg overflow-hidden bg-content1">
+              <div className="flex-shrink-0 border-b border-divider mb-4">
                 <EditorToolbar editor={activeEditor} />
               </div>
               {/* 七天编辑器 */}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="flex-1 overflow-auto space-y-3">
                 {noteWeekDays.map((day, index) => renderWeekDayEditor(day, index))}
               </div>
             </div>

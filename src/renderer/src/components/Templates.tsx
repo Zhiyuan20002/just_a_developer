@@ -86,7 +86,7 @@ export function Templates() {
           </div>
 
           {showAddTemplate && (
-            <Card className="bg-content1/50 backdrop-blur mb-4">
+            <Card className="card-flat mb-4">
               <CardBody className="space-y-3">
                 <Input
                   size="sm"
@@ -115,7 +115,7 @@ export function Templates() {
 
           <div className="space-y-3">
             {templates.map((template) => (
-              <Card key={template.id} className="bg-content1/50 backdrop-blur">
+              <Card key={template.id} className="card-flat">
                 <CardHeader className="flex justify-between items-center py-3">
                   <div className="flex items-center gap-2 flex-1">
                     <FileText className="w-4 h-4 text-primary" />
@@ -212,7 +212,7 @@ export function Templates() {
               const count = examples.length
 
               return (
-                <Card key={template.id} className="bg-content1/50 backdrop-blur">
+                <Card key={template.id} className="card-flat">
                   <CardHeader className="flex justify-between items-center py-3">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-default-500" />

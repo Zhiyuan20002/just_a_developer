@@ -346,7 +346,7 @@ export function Settings() {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-6">
           {/* Git 设置 */}
-          <Card className="bg-content1/50 backdrop-blur">
+          <Card className="card-flat">
             <CardHeader className="flex-col items-start gap-1">
               <div className="flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-primary" />
@@ -377,7 +377,7 @@ export function Settings() {
           </Card>
 
           {/* API 配置 */}
-          <Card className="bg-content1/50 backdrop-blur">
+          <Card className="card-flat">
             <CardHeader className="flex-col items-start gap-1">
               <div className="flex items-center gap-2">
                 <Key className="w-5 h-5 text-primary" />
@@ -535,7 +535,7 @@ export function Settings() {
           </Card>
 
           {/* 模型设置 */}
-          <Card className="bg-content1/50 backdrop-blur">
+          <Card className="card-flat">
             <CardHeader className="flex justify-between items-start">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -625,7 +625,7 @@ export function Settings() {
           </Card>
 
           {/* 数据存储 */}
-          <Card className="bg-content1/50 backdrop-blur">
+          <Card className="card-flat">
             <CardHeader className="flex-col items-start gap-1">
               <div className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-primary" />
@@ -648,7 +648,7 @@ export function Settings() {
           </Card>
 
           {/* 外观设置 */}
-          <Card className="bg-content1/50 backdrop-blur">
+          <Card className="card-flat">
             <CardHeader className="flex-col items-start gap-1">
               <div className="flex items-center gap-2">
                 <Sun className="w-5 h-5 text-primary" />
@@ -681,7 +681,7 @@ export function Settings() {
 
         {/* 右侧：系统提示词编辑 */}
         <div>
-          <Card className="bg-content1/50 backdrop-blur h-full">
+          <Card className="card-flat h-full">
             <CardHeader className="flex justify-between items-start">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">

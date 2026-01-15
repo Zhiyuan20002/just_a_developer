@@ -37,10 +37,14 @@ jobs:
 
       - name: Build macOS artifacts
         if: matrix.os == 'macos-latest'
+        env:
+          ELECTRON_BUILDER_PUBLISH: never
         run: npm run build:mac
 
       - name: Build Windows artifacts
         if: matrix.os == 'windows-latest'
+        env:
+          ELECTRON_BUILDER_PUBLISH: never
         run: npm run build:win
 
       - name: Extract release notes

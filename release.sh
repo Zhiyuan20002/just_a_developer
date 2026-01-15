@@ -29,8 +29,13 @@ if ! grep -q "^## ${version}$" CHANGELOG.md; then
   exit 1
 fi
 
-echo "更新版本号为 ${version}"
-npm version "$version" --no-git-tag-version
+current_version=$(node -p "require('./package.json').version")
+if [[ "$current_version" != "$version" ]]; then
+  echo "更新版本号为 ${version}"
+  npm version "$version" --no-git-tag-version
+else
+  echo "版本号已是 ${version}，跳过更新"
+fi
 
 echo "创建并推送标签 ${tag}"
 git tag "$tag"

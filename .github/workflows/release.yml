@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (vX.Y.Z)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS artifacts
+        if: matrix.os == 'macos-latest'
+        run: npm run build:mac
+
+      - name: Build Windows artifacts
+        if: matrix.os == 'windows-latest'
+        run: npm run build:win
+
+      - name: Extract release notes
+        run: |
+          node -e "const fs=require('fs');const tag=process.env.RELEASE_TAG||'';const version=tag.replace(/^v/,'');const lines=fs.readFileSync('CHANGELOG.md','utf8').split(/\r?\n/);const header=`## ${version}`;let start=-1;for(let i=0;i<lines.length;i+=1){if(lines[i].trim()===header){start=i;break;}}if(start<0){console.error(`未找到 ${header} 段落，请先更新 CHANGELOG.md`);process.exit(1);}let output=lines.slice(start).join('\n');for(let i=start+1;i<lines.length;i+=1){if(lines[i].trim().startsWith('## ')){output=lines.slice(start,i).join('\n');break;}}fs.writeFileSync('release-notes.txt',output.trim()+"\n");"
+
+      - name: Upload macOS assets
+        if: matrix.os == 'macos-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          body_path: release-notes.txt
+          files: |
+            dist/*.dmg
+            dist/*-mac.zip
+          fail_on_unmatched_files: true
+          allow_updates: true
+
+      - name: Upload Windows assets
+        if: matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          body_path: release-notes.txt
+          files: |
+            dist/*.exe
+          fail_on_unmatched_files: true
+          allow_updates: true

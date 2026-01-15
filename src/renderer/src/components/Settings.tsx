@@ -125,6 +125,8 @@ export function Settings() {
   const [apiKey, setApiKey] = useState('')
   const [apiProvider, setApiProvider] = useState('openai')
   const [models, setModels] = useState<ModelInfo[]>([])
+  const [customModels, setCustomModels] = useState<ModelInfo[]>([])
+  const [newCustomModel, setNewCustomModel] = useState('')
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [loadingModels, setLoadingModels] = useState(false)
   const [storageSize, setStorageSize] = useState<string>('计算中...')
@@ -208,6 +210,26 @@ export function Settings() {
     loadApiKeyAndConnect()
   }, [apiProvider, setApiStatus])
 
+  useEffect(() => {
+    const loadCustomModels = async () => {
+      try {
+        const savedModels = await window.electron.ipcRenderer.invoke(
+          'get-custom-models',
+          apiProvider
+        )
+        if (savedModels && Array.isArray(savedModels)) {
+          setCustomModels(savedModels)
+        } else {
+          setCustomModels([])
+        }
+      } catch {
+        setCustomModels([])
+      }
+      setNewCustomModel('')
+    }
+    loadCustomModels()
+  }, [apiProvider])
+
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B'
     const k = 1024
@@ -240,6 +262,36 @@ export function Settings() {
       setModels([])
     }
     setLoadingModels(false)
+  }
+
+  const handleAddCustomModel = async () => {
+    const trimmed = newCustomModel.trim()
+    if (!trimmed) return
+    const existing = [...models, ...customModels].some((model) => model.id === trimmed)
+    if (!existing) {
+      const updated = [...customModels, { id: trimmed, name: trimmed }]
+      setCustomModels(updated)
+      await window.electron.ipcRenderer.invoke('save-custom-models', {
+        provider: apiProvider,
+        models: updated
+      })
+    }
+    setSelectedModel(trimmed)
+    window.electron.ipcRenderer.invoke('save-selected-model', trimmed)
+    setNewCustomModel('')
+  }
+
+  const handleRemoveCustomModel = async (modelId: string) => {
+    const updated = customModels.filter((model) => model.id !== modelId)
+    setCustomModels(updated)
+    await window.electron.ipcRenderer.invoke('save-custom-models', {
+      provider: apiProvider,
+      models: updated
+    })
+    if (selectedModel === modelId) {
+      setSelectedModel('')
+      window.electron.ipcRenderer.invoke('save-selected-model', '')
+    }
   }
 
   const handleAddCustomProvider = () => {
@@ -294,7 +346,17 @@ export function Settings() {
     }, 0)
   }
 
-  const builtinProviders = ['openai', 'claude', 'gemini', 'deepseek', 'siliconflow', 'zhipu', 'openrouter', 'ollama']
+  const builtinProviders = [
+    'openai',
+    'claude',
+    'gemini',
+    'deepseek',
+    'siliconflow',
+    'iflow',
+    'zhipu',
+    'openrouter',
+    'ollama'
+  ]
 
   // 服务商显示名称映射
   const providerNames: Record<string, string> = {
@@ -303,20 +365,34 @@ export function Settings() {
     gemini: 'Gemini',
     deepseek: 'DeepSeek',
     siliconflow: '硅基流动',
+    iflow: '心流iFlow',
     zhipu: '智谱AI',
     openrouter: 'OpenRouter',
     ollama: 'Ollama'
   }
   const userInitial = getInitial(gitUsername)
 
+  const allModels = useMemo(() => {
+    const modelMap = new Map<string, ModelInfo>()
+    models.forEach((model) => modelMap.set(model.id, model))
+    customModels.forEach((model) => {
+      if (!modelMap.has(model.id)) modelMap.set(model.id, model)
+    })
+    return Array.from(modelMap.values())
+  }, [models, customModels])
+
+  const customModelIds = useMemo(() => {
+    return new Set(customModels.map((model) => model.id))
+  }, [customModels])
+
   // 过滤模型列表
   const filteredModels = useMemo(() => {
-    if (!modelSearch.trim()) return models
+    if (!modelSearch.trim()) return allModels
     const search = modelSearch.toLowerCase()
-    return models.filter(
+    return allModels.filter(
       (m) => m.id.toLowerCase().includes(search) || m.name.toLowerCase().includes(search)
     )
-  }, [models, modelSearch])
+  }, [allModels, modelSearch])
 
   // 排序模型列表，将选中的模型放在第一位
   const sortedModels = useMemo(() => {
@@ -327,7 +403,10 @@ export function Settings() {
   }, [filteredModels, selectedModel])
 
   // 计算补全后的完整 URL
-  const fullApiUrl = useMemo(() => getFullApiUrl(newCustomProvider.baseUrl), [newCustomProvider.baseUrl])
+  const fullApiUrl = useMemo(
+    () => getFullApiUrl(newCustomProvider.baseUrl),
+    [newCustomProvider.baseUrl]
+  )
 
   return (
     <div className="flex-1 p-6 overflow-auto">
@@ -370,9 +449,7 @@ export function Settings() {
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-default-400">
-                💡 设置后将自动在首页筛选该用户的提交记录
-              </p>
+              <p className="text-xs text-default-400">💡 设置后将自动在首页筛选该用户的提交记录</p>
             </CardBody>
           </Card>
 
@@ -560,8 +637,32 @@ export function Settings() {
               </Button>
             </CardHeader>
             <CardBody className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    size="sm"
+                    placeholder="手动添加模型 ID"
+                    value={newCustomModel}
+                    onValueChange={setNewCustomModel}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    color="primary"
+                    startContent={<Plus className="w-4 h-4" />}
+                    onPress={handleAddCustomModel}
+                    isDisabled={!newCustomModel.trim()}
+                  >
+                    添加
+                  </Button>
+                </div>
+                <p className="text-xs text-default-400">
+                  支持手动输入模型标识（如 gpt-4o 或 claude-3-5-sonnet）
+                </p>
+              </div>
+
               {/* 搜索框 - 仅当模型数量超过10个时显示 */}
-              {models.length > 10 && (
+              {allModels.length > 10 && (
                 <Input
                   size="sm"
                   placeholder="搜索模型..."
@@ -578,23 +679,37 @@ export function Settings() {
               {sortedModels.length > 0 ? (
                 <div className="max-h-[300px] overflow-auto">
                   <div className="flex gap-2 flex-wrap">
-                    {sortedModels.map((model) => (
-                      <Button
-                        key={model.id}
-                        size="sm"
-                        variant={selectedModel === model.id ? 'solid' : 'bordered'}
-                        color={selectedModel === model.id ? 'primary' : 'default'}
-                        onPress={() => {
-                          setSelectedModel(model.id)
-                          window.electron.ipcRenderer.invoke('save-selected-model', model.id)
-                        }}
-                      >
-                        {model.name || model.id}
-                      </Button>
-                    ))}
+                    {sortedModels.map((model) => {
+                      const isCustom = customModelIds.has(model.id)
+                      return (
+                        <div key={model.id} className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant={selectedModel === model.id ? 'solid' : 'bordered'}
+                            color={selectedModel === model.id ? 'primary' : 'default'}
+                            onPress={() => {
+                              setSelectedModel(model.id)
+                              window.electron.ipcRenderer.invoke('save-selected-model', model.id)
+                            }}
+                          >
+                            {model.name || model.id}
+                          </Button>
+                          {isCustom && (
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="light"
+                              onPress={() => handleRemoveCustomModel(model.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              ) : models.length === 0 ? (
+              ) : allModels.length === 0 ? (
                 <div className="text-sm text-default-500">
                   <p>点击右上角刷新按钮获取模型列表</p>
                   <div className="flex gap-2 flex-wrap mt-3">

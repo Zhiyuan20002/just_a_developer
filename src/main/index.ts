@@ -151,6 +151,9 @@ ipcMain.handle('get-models', async (_event, provider: string) => {
       case 'siliconflow':
         baseUrl = 'https://api.siliconflow.cn/v1/models'
         break
+      case 'iflow':
+        baseUrl = 'https://apis.iflow.cn/v1/models'
+        break
       case 'zhipu':
         baseUrl = 'https://open.bigmodel.cn/api/paas/v4/models'
         break
@@ -243,6 +246,17 @@ ipcMain.handle('save-custom-providers', async (_event, providers) => {
 // 获取自定义供应商
 ipcMain.handle('get-custom-providers', async () => {
   return getSettingAsJson('customProviders') || []
+})
+
+// 保存自定义模型
+ipcMain.handle('save-custom-models', async (_event, { provider, models }) => {
+  setSettingAsJson(`customModels_${provider}`, models)
+  return { success: true }
+})
+
+// 获取自定义模型
+ipcMain.handle('get-custom-models', async (_event, provider: string) => {
+  return getSettingAsJson(`customModels_${provider}`) || []
 })
 
 // 保存选中的模型
@@ -430,6 +444,9 @@ ipcMain.on(
           break
         case 'siliconflow':
           baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+          break
+        case 'iflow':
+          baseUrl = 'https://apis.iflow.cn/v1/chat/completions'
           break
         case 'zhipu':
           baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'

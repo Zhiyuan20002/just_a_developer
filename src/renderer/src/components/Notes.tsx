@@ -443,9 +443,9 @@ export function Notes() {
 
   return (
     <div className="flex-1 p-6 flex gap-6 overflow-hidden">
-      <div className="flex-1 flex flex-col gap-6 min-w-0">
+      <div className="flex-1 flex flex-col gap-6 min-w-0 overflow-hidden">
         {/* 左侧日历区域 */}
-        <Card className="card-flat flex-1 h-fit">
+        <Card className="card-flat flex-none">
           <CardHeader className="flex justify-between items-center pb-2">
             <div className="flex items-center gap-1">
               <Button isIconOnly size="sm" variant="light" onPress={goToPrev}>
@@ -477,7 +477,9 @@ export function Notes() {
         </Card>
 
         {/* 提交记录区域 */}
-        <Card className="card-flat">
+        <Card
+          className={`card-flat flex flex-col ${commitsExpanded ? 'flex-1 min-h-0' : 'flex-none'}`}
+        >
           <CardHeader className="flex justify-between items-center py-3">
             <div className="flex items-center gap-2">
               <Button
@@ -538,7 +540,7 @@ export function Notes() {
             </div>
           </CardHeader>
           {commitsExpanded && (
-            <CardBody className="pt-0">
+            <CardBody className="pt-0 flex-1 overflow-auto">
               {selectedDateCommits.length === 0 ? (
                 <div className="text-center py-10 text-default-500">
                   <GitCommit className="w-10 h-10 mx-auto mb-3 opacity-50" />

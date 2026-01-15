@@ -59,6 +59,26 @@ npm run build
 5. 回到「仪表盘」选择提交与笔记，在右侧生成器中生成报告
 6. 对生成内容进行编辑后复制或导出 Markdown
 
+## 发布流程
+
+推荐使用 `release.sh` 自动检测平台并发布 Release：
+
+```bash
+./release.sh 0.0.2
+```
+
+脚本会自动完成：
+
+- 校验 `CHANGELOG.md` 是否包含对应版本段落
+- 更新 `package.json` 版本号
+- 根据平台运行构建命令：
+  - macOS：`npm run build:mac`
+  - Windows：`npm run build:win`
+  - Linux：`npm run build:linux`
+- 上传构建产物到 GitHub Release
+
+发布说明会从 `CHANGELOG.md` 中截取当前版本段落生成。
+
 ## 许可证
 
 MIT

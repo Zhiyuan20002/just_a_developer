@@ -18,8 +18,45 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 tag="v${version}"
-if git tag -l "$tag" | grep -q .; then
-  echo "标签 ${tag} 已存在。"
+platform=$(uname -s)
+arch=$(uname -m)
+
+case "$platform" in
+  Darwin)
+    build_cmd="npm run build:mac"
+    artifact_patterns=("dist/*.dmg" "dist/*-mac.zip")
+    ;;
+  Linux)
+    build_cmd="npm run build:linux"
+    artifact_patterns=("dist/*.AppImage" "dist/*.deb" "dist/*.snap")
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    build_cmd="npm run build:win"
+    artifact_patterns=("dist/*-setup.exe" "dist/*.exe")
+    ;;
+  *)
+    echo "不支持的平台: ${platform} (${arch})"
+    exit 1
+    ;;
+esac
+
+if gh release view "$tag" >/dev/null 2>&1; then
+  echo "Release ${tag} 已存在。"
+  exit 1
+fi
+
+shopt -s nullglob
+existing_artifacts=()
+for pattern in "${artifact_patterns[@]}"; do
+  matches=($pattern)
+  if [[ ${#matches[@]} -gt 0 ]]; then
+    existing_artifacts+=("${matches[@]}")
+  fi
+  unset matches
+ done
+
+if [[ ${#existing_artifacts[@]} -gt 0 ]]; then
+  echo "检测到旧产物，请先清理 dist 目录。"
   exit 1
 fi
 
@@ -37,8 +74,32 @@ else
   echo "版本号已是 ${version}，跳过更新"
 fi
 
-echo "创建并推送标签 ${tag}"
-git tag "$tag"
-git push origin "$tag"
+echo "开始构建产物 (${platform})"
+${build_cmd}
 
-echo "已推送 ${tag}，GitHub Actions 将自动构建并发布。"
+artifacts=()
+missing_patterns=()
+for pattern in "${artifact_patterns[@]}"; do
+  matches=($pattern)
+  if [[ ${#matches[@]} -eq 0 ]]; then
+    missing_patterns+=("$pattern")
+  else
+    artifacts+=("${matches[@]}")
+  fi
+  unset matches
+ done
+
+if [[ ${#missing_patterns[@]} -gt 0 ]]; then
+  echo "未找到构建产物，缺少匹配: ${missing_patterns[*]}"
+  exit 1
+fi
+
+echo "生成 Release 说明"
+node -e "const fs=require('fs');const version='${version}';const lines=fs.readFileSync('CHANGELOG.md','utf8').split(/\r?\n/);const header=`## ${version}`;let start=-1;for(let i=0;i<lines.length;i+=1){if(lines[i].trim()===header){start=i;break;}}if(start<0){console.error(`未找到 ${header} 段落`);process.exit(1);}let output=lines.slice(start).join('\n');for(let i=start+1;i<lines.length;i+=1){if(lines[i].trim().startsWith('## ')){output=lines.slice(start,i).join('\n');break;}}fs.writeFileSync('release-notes.txt',output.trim()+"\n");"
+
+echo "发布 GitHub Release ${tag}"
+gh release create "$tag" "${artifacts[@]}" --title "$tag" --notes-file release-notes.txt --target main
+
+rm -f release-notes.txt
+
+echo "发布完成: ${tag}"

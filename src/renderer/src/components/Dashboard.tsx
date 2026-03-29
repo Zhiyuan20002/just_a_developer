@@ -31,7 +31,7 @@ export function Dashboard() {
     commits,
     selectedCommits,
     toggleCommit,
-    selectAllCommits,
+    selectCommits,
     clearSelectedCommits,
     repositories,
     setCommits,
@@ -208,16 +208,16 @@ export function Dashboard() {
   }
 
   const selectAllFiltered = () => {
-    filteredCommits.forEach((commit) => {
-      if (!selectedCommits.includes(commit.hash)) {
-        toggleCommit(commit.hash)
-      }
-    })
+    selectCommits(filteredCommits.map((commit) => commit.hash))
     filteredNotes.forEach((note) => {
       if (!selectedNotes.includes(note.date)) {
         toggleNote(note.date)
       }
     })
+  }
+
+  const selectAllFilteredCommits = () => {
+    selectCommits(filteredCommits.map((commit) => commit.hash))
   }
 
   const selectAllFilteredNotes = () => {
@@ -398,7 +398,7 @@ export function Dashboard() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="light" size="sm" onPress={selectAllCommits}>
+            <Button variant="light" size="sm" onPress={selectAllFilteredCommits}>
               全选
             </Button>
             <Button variant="light" size="sm" onPress={clearSelectedCommits}>

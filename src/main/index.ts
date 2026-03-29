@@ -8,6 +8,12 @@ import { closeDatabase, initDatabase } from './database'
 import { getAllRepositories, saveRepositories } from './database/repositories/repository'
 import { getAllTemplates, saveTemplates } from './database/repositories/template'
 import { getAllNotes, saveNotes } from './database/repositories/note'
+import {
+  deleteWeeklyReport,
+  getAllWeeklyReports,
+  getWeeklyReportByWeek,
+  saveWeeklyReport
+} from './database/repositories/weekly-report'
 import { getAllWritingExamples, saveWritingExamples } from './database/repositories/writing-example'
 import {
   getSetting,
@@ -47,6 +53,152 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function normalizeOpenAIContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (part && typeof part === 'object' && 'text' in part) {
+          return typeof part.text === 'string' ? part.text : ''
+        }
+        return ''
+      })
+      .join('')
+  }
+
+  return ''
+}
+
+function getCompatibleChatConfig(provider: string): {
+  baseUrl: string
+  actualApiKey: string | null
+} | null {
+  const apiKey = getSetting(`apiKeys_${provider}`)
+  let baseUrl = ''
+  let actualApiKey = apiKey
+
+  switch (provider) {
+    case 'openai':
+      baseUrl = 'https://api.openai.com/v1/chat/completions'
+      break
+    case 'deepseek':
+      baseUrl = 'https://api.deepseek.com/v1/chat/completions'
+      break
+    case 'siliconflow':
+      baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+      break
+    case 'iflow':
+      baseUrl = 'https://apis.iflow.cn/v1/chat/completions'
+      break
+    case 'zhipu':
+      baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+      break
+    case 'openrouter':
+      baseUrl = 'https://openrouter.ai/api/v1/chat/completions'
+      break
+    default: {
+      const customProviders =
+        getSettingAsJson<Array<{ id: string; baseUrl: string; apiKey: string }>>(
+          'customProviders'
+        ) || []
+      const custom = customProviders.find((item) => item.id === provider)
+      if (custom) {
+        baseUrl = `${custom.baseUrl}/chat/completions`
+        actualApiKey = custom.apiKey || apiKey
+      }
+    }
+  }
+
+  if (!baseUrl) {
+    return null
+  }
+
+  return {
+    baseUrl,
+    actualApiKey
+  }
+}
+
+async function generateText(
+  prompt: string,
+  provider: string,
+  model: string
+): Promise<string> {
+  const apiKey = getSetting(`apiKeys_${provider}`)
+
+  if (provider === 'gemini') {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`API 错误: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+
+  if (provider === 'ollama') {
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`API 错误: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data.response || ''
+  }
+
+  const compatibleConfig = getCompatibleChatConfig(provider)
+  if (!compatibleConfig) {
+    throw new Error('未知的 AI 供应商')
+  }
+
+  const response = await fetch(compatibleConfig.baseUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${compatibleConfig.actualApiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      stream: false
+    })
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`API 错误: ${response.status} - ${errorText}`)
+  }
+
+  const data = await response.json()
+  return normalizeOpenAIContent(data.choices?.[0]?.message?.content)
 }
 
 // 选择文件夹
@@ -367,6 +519,50 @@ ipcMain.handle('save-notes', async (_event, notes) => {
 // 获取笔记
 ipcMain.handle('get-notes', async () => {
   return getAllNotes()
+})
+
+ipcMain.handle(
+  'generate-text',
+  async (
+    _event,
+    {
+      prompt,
+      provider,
+      model
+    }: {
+      prompt: string
+      provider: string
+      model: string
+    }
+  ) => {
+    try {
+      const content = await generateText(prompt, provider, model)
+      return { content }
+    } catch (error) {
+      return { error: String(error) }
+    }
+  }
+)
+
+// 获取历史周报
+ipcMain.handle('get-weekly-reports', async () => {
+  return getAllWeeklyReports()
+})
+
+// 按周获取历史周报
+ipcMain.handle('get-weekly-report-by-week', async (_event, weekStart: string) => {
+  return getWeeklyReportByWeek(weekStart)
+})
+
+// 保存历史周报
+ipcMain.handle('save-weekly-report', async (_event, report) => {
+  return saveWeeklyReport(report)
+})
+
+// 删除历史周报
+ipcMain.handle('delete-weekly-report', async (_event, id: string) => {
+  deleteWeeklyReport(id)
+  return { success: true }
 })
 
 // 保存主题设置

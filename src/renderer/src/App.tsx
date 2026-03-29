@@ -6,6 +6,7 @@ import { Projects } from '@/components/Projects'
 import { Templates } from '@/components/Templates'
 import { Settings } from '@/components/Settings'
 import { Notes } from '@/components/Notes'
+import { Reports } from '@/components/Reports'
 import { Composer } from '@/components/Composer'
 import { useAppStore } from '@/stores/app-store'
 
@@ -27,6 +28,8 @@ function App(): React.JSX.Element {
         return <Projects />
       case 'notes':
         return <Notes />
+      case 'reports':
+        return <Reports />
       case 'templates':
         return <Templates />
       case 'settings':

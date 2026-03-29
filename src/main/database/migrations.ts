@@ -61,6 +61,29 @@ export function runMigrations(db: Database.Database): void {
           updated_at TEXT NOT NULL
         );
       `)
+    },
+    // v2: 历史周报
+    () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS weekly_reports (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          week_start TEXT NOT NULL UNIQUE,
+          week_end TEXT NOT NULL,
+          content TEXT NOT NULL,
+          template_id TEXT,
+          author TEXT,
+          source_commits TEXT NOT NULL DEFAULT '[]',
+          source_notes TEXT NOT NULL DEFAULT '[]',
+          split_target_dates TEXT NOT NULL DEFAULT '[]',
+          split_status TEXT NOT NULL DEFAULT 'not_split',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_weekly_reports_week_start
+        ON weekly_reports(week_start DESC);
+      `)
     }
   ]
 

@@ -65,7 +65,7 @@ describe('AppStore', () => {
   })
 
   it('应该正确选择/取消选择提交', () => {
-    const { setCommits, toggleCommit, selectAllCommits, clearSelectedCommits } =
+    const { setCommits, toggleCommit, selectCommits, selectAllCommits, clearSelectedCommits } =
       useAppStore.getState()
     const mockCommits = [
       {
@@ -92,6 +92,10 @@ describe('AppStore', () => {
     // 选择单个
     toggleCommit('abc123')
     expect(useAppStore.getState().selectedCommits).toContain('abc123')
+
+    // 按子集选中
+    selectCommits(['def456'])
+    expect(useAppStore.getState().selectedCommits).toEqual(['abc123', 'def456'])
 
     // 全选
     selectAllCommits()

@@ -1,17 +1,25 @@
-import { Sparkles, Copy, Download, Check, ChevronDown, Square } from 'lucide-react'
+import {
+  Sparkles,
+  Copy,
+  Download,
+  ChevronDown,
+  Square,
+  Save
+} from 'lucide-react'
 import {
   Card,
   CardHeader,
   CardBody,
   Button,
-  Textarea,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem
 } from '@heroui/react'
 import { useAppStore, Commit } from '@/stores/app-store'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { MarkdownEditor } from './MarkdownEditor'
+import { deriveWeekRangeFromDates, getWeekRangeText, getWeeklyReportTitle } from '@/lib/report'
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个专业的工作报告撰写助手。请根据用户提供的 Git 提交记录和笔记内容，生成一份结构清晰、内容专业的工作报告。
 
@@ -62,10 +70,14 @@ export function Composer() {
     setFilterTemplate,
     apiStatus,
     notes,
-    selectedNotes
+    selectedNotes,
+    saveWeeklyReport,
+    weeklyReports,
+    selectedAuthor
   } = useAppStore()
 
   const [copied, setCopied] = useState(false)
+  const [isSavingReport, setIsSavingReport] = useState(false)
   const generatedContentRef = useRef('')
 
   useEffect(() => {
@@ -93,15 +105,37 @@ export function Composer() {
     }
   }, [setGeneratedContent, setIsGenerating])
 
-  const selectedCommitData = commits.filter((c) => selectedCommits.includes(c.hash))
-  const currentTemplate = templates.find((t) => t.id === selectedTemplate)
+  const selectedCommitData = useMemo(
+    () => commits.filter((commit) => selectedCommits.includes(commit.hash)),
+    [commits, selectedCommits]
+  )
+  const selectedNotesData = useMemo(
+    () => notes.filter((note) => selectedNotes.includes(note.date)),
+    [notes, selectedNotes]
+  )
+  const currentTemplate = templates.find((template) => template.id === selectedTemplate)
+  const isWeeklyReport =
+    currentTemplate?.id === 'weekly' || currentTemplate?.name?.includes('周报') || false
 
-  const groupCommitsByRepo = (commits: Commit[]) => {
+  const draftWeekRange = useMemo(() => {
+    const dateValues = [
+      ...selectedCommitData.map((commit) => commit.date),
+      ...selectedNotesData.map((note) => note.date)
+    ]
+    return deriveWeekRangeFromDates(dateValues)
+  }, [selectedCommitData, selectedNotesData])
+
+  const existingWeeklyReport = useMemo(
+    () => weeklyReports.find((report) => report.weekStart === draftWeekRange.weekStart),
+    [weeklyReports, draftWeekRange.weekStart]
+  )
+
+  const groupCommitsByRepo = (commitList: Commit[]) => {
     const groups: Record<string, { name: string; description?: string; commits: Commit[] }> = {}
-    commits.forEach((commit) => {
+    commitList.forEach((commit) => {
       const repoKey = commit.repoId || 'unknown'
       if (!groups[repoKey]) {
-        const repo = repositories.find((r) => r.id === commit.repoId)
+        const repo = repositories.find((repository) => repository.id === commit.repoId)
         groups[repoKey] = {
           name: repo?.alias || repo?.name || commit.repoName || '未知项目',
           description: repo?.description || commit.repoDescription,
@@ -113,22 +147,22 @@ export function Composer() {
     return groups
   }
 
-  const generateCommitListByRepo = (commits: Commit[]) => {
-    const groups = groupCommitsByRepo(commits)
+  const generateCommitListByRepo = (commitList: Commit[]) => {
+    const groups = groupCommitsByRepo(commitList)
     let result = ''
     Object.entries(groups).forEach(([, group]) => {
       result += `### ${group.name}\n`
       if (group.description) result += `> ${group.description}\n\n`
-      group.commits.forEach((c) => {
-        result += `- ${c.message} (${c.hash.slice(0, 7)})\n`
+      group.commits.forEach((commit) => {
+        result += `- ${commit.message} (${commit.hash.slice(0, 7)})\n`
       })
       result += '\n'
     })
     return result.trim()
   }
 
-  const generateProjectContext = (commits: Commit[]) => {
-    const groups = groupCommitsByRepo(commits)
+  const generateProjectContext = (commitList: Commit[]) => {
+    const groups = groupCommitsByRepo(commitList)
     let context = '涉及的项目：\n'
     Object.entries(groups).forEach(([, group]) => {
       context += `- ${group.name}`
@@ -144,37 +178,36 @@ export function Composer() {
 
     const commitList = generateCommitListByRepo(selectedCommitData)
     const projectContext = generateProjectContext(selectedCommitData)
-    const totalAdditions = selectedCommitData.reduce((sum, c) => sum + c.additions, 0)
-    const totalDeletions = selectedCommitData.reduce((sum, c) => sum + c.deletions, 0)
+    const totalAdditions = selectedCommitData.reduce((sum, commit) => sum + commit.additions, 0)
+    const totalDeletions = selectedCommitData.reduce((sum, commit) => sum + commit.deletions, 0)
 
-    const selectedNotesData = notes.filter((n) => selectedNotes.includes(n.date))
     let notesText = '暂无笔记'
     let notesCount = 0
     let notesLines = 0
 
     if (selectedNotesData.length > 0) {
       notesText = selectedNotesData
-        .map((n) => {
-          const date = new Date(n.date)
+        .map((note) => {
+          const date = new Date(note.date)
           const dateStr = date.toLocaleDateString('zh-CN', {
             month: 'long',
             day: 'numeric',
             weekday: 'long'
           })
-          return `### ${dateStr}\n${n.content}`
+          return `### ${dateStr}\n${note.content}`
         })
         .join('\n\n')
       notesCount = selectedNotesData.length
       notesLines = selectedNotesData.reduce(
-        (sum, n) => sum + (n.content ? n.content.split('\n').length : 0),
+        (sum, note) => sum + (note.content ? note.content.split('\n').length : 0),
         0
       )
     }
 
-    const relevantExamples = writingExamples.filter((e) => e.templateId === currentTemplate?.id)
+    const relevantExamples = writingExamples.filter((example) => example.templateId === currentTemplate?.id)
     let examplesText = '暂无写作示例'
     if (relevantExamples.length > 0) {
-      examplesText = relevantExamples.map((e) => `### ${e.title}\n${e.content}`).join('\n\n')
+      examplesText = relevantExamples.map((example) => `### ${example.title}\n${example.content}`).join('\n\n')
     }
 
     const templateContent = currentTemplate?.content || ''
@@ -215,14 +248,14 @@ export function Composer() {
       }
     }
 
-    const isWeekly = currentTemplate?.id === 'weekly' || currentTemplate?.name?.includes('周报')
     let content = ''
-    if (isWeekly) {
+    if (isWeeklyReport) {
       content = `# 本周完成工作\n${commitList}\n\n# 本周工作总结\n本周共完成 ${selectedCommitData.length} 次提交，新增代码 ${totalAdditions} 行，删除代码 ${totalDeletions} 行。\n${projectContext}\n\n# 下周工作计划\n- 待补充`
     } else {
       content = `# 今日完成工作\n${commitList}\n\n# 今日工作总结\n今日共完成 ${selectedCommitData.length} 次提交，新增代码 ${totalAdditions} 行，删除代码 ${totalDeletions} 行。\n${projectContext}\n\n# 明日工作计划\n- 待补充`
     }
 
+    generatedContentRef.current = content
     setGeneratedContent(content)
     setIsGenerating(false)
   }
@@ -247,18 +280,51 @@ export function Composer() {
     window.electron.ipcRenderer.send('stop-generate-report')
   }
 
-  const involvedRepos = new Set(selectedCommitData.map((c) => c.repoId).filter(Boolean))
+  const handleSaveWeeklyReport = async () => {
+    if (!generatedContent || !isWeeklyReport) return
+
+    setIsSavingReport(true)
+    try {
+      await saveWeeklyReport({
+        id: existingWeeklyReport?.id,
+        title: existingWeeklyReport?.title || getWeeklyReportTitle(draftWeekRange.weekStart),
+        weekStart: draftWeekRange.weekStart,
+        weekEnd: draftWeekRange.weekEnd,
+        content: generatedContent,
+        templateId: currentTemplate?.id || null,
+        author: selectedAuthor,
+        sourceCommits: selectedCommitData,
+        sourceNotes: selectedNotesData,
+        splitTargetDates: existingWeeklyReport?.splitTargetDates || [],
+        splitStatus: existingWeeklyReport?.splitStatus || 'not_split'
+      })
+    } finally {
+      setIsSavingReport(false)
+    }
+  }
+
+  const handleDraftChange = (content: string) => {
+    generatedContentRef.current = content
+    setGeneratedContent(content)
+  }
+
+  const involvedRepos = new Set(selectedCommitData.map((commit) => commit.repoId).filter(Boolean))
   const hasSelection = selectedCommits.length > 0 || selectedNotes.length > 0
 
   return (
-    <div className="w-96 flex flex-col m-2 ml-0 sidebar-float rounded-2xl">
+    <div className="w-[420px] flex flex-col m-2 ml-0 sidebar-float rounded-2xl overflow-hidden">
       <div className="p-4 border-b border-divider">
-        <h3 className="font-medium">生成编辑器</h3>
+        <h3 className="font-medium">周报生成器</h3>
         <p className="text-xs text-default-500 mt-1">
           已选择 {selectedCommits.length} 条提交
           {selectedNotes.length > 0 && `、${selectedNotes.length} 篇笔记`}
           {involvedRepos.size > 0 && `，涉及 ${involvedRepos.size} 个项目`}
         </p>
+        {isWeeklyReport && (
+          <p className="text-xs text-default-400 mt-1">
+            当前周次：{getWeekRangeText(draftWeekRange.weekStart, draftWeekRange.weekEnd)}
+          </p>
+        )}
       </div>
 
       <div className="flex-1 p-4 overflow-auto">
@@ -318,29 +384,44 @@ export function Composer() {
         {generatedContent && (
           <Card className="card-flat">
             <CardHeader className="py-3 flex justify-between items-center">
-              <p className="text-sm font-medium">生成结果</p>
-              <div className="flex gap-1">
-                <Button isIconOnly variant="light" size="sm" onPress={handleCopy}>
-                  {copied ? (
-                    <Check className="w-4 h-4 text-success" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
+              <div>
+                <p className="text-sm font-medium">生成结果</p>
+                {isWeeklyReport && (
+                  <p className="text-xs text-default-400 mt-1">
+                    {existingWeeklyReport ? '保存后将更新历史周报' : '可保存为新的历史周报'}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-1 flex-wrap justify-end">
+                <Button size="sm" variant="light" startContent={<Copy className="w-4 h-4" />} onPress={handleCopy}>
+                  {copied ? '已复制' : '复制'}
                 </Button>
-                <Button isIconOnly variant="light" size="sm" onPress={handleExport}>
-                  <Download className="w-4 h-4" />
+                <Button
+                  size="sm"
+                  variant="light"
+                  startContent={<Save className="w-4 h-4" />}
+                  isDisabled={!isWeeklyReport || isSavingReport}
+                  isLoading={isSavingReport}
+                  onPress={handleSaveWeeklyReport}
+                >
+                  {existingWeeklyReport ? '更新历史' : '保存历史'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="light"
+                  startContent={<Download className="w-4 h-4" />}
+                  onPress={handleExport}
+                >
+                  导出
                 </Button>
               </div>
             </CardHeader>
             <CardBody className="pt-0">
-              <Textarea
-                value={generatedContent}
-                onValueChange={setGeneratedContent}
-                isReadOnly={isGenerating}
-                minRows={15}
-                classNames={{
-                  input: 'font-mono text-xs'
-                }}
+              <MarkdownEditor
+                content={generatedContent}
+                onChange={handleDraftChange}
+                placeholder="生成后的周报会显示在这里..."
+                minHeight="420px"
               />
             </CardBody>
           </Card>

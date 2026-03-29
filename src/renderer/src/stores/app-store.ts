@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ViewType = 'dashboard' | 'projects' | 'templates' | 'settings' | 'notes'
+export type ViewType = 'dashboard' | 'projects' | 'templates' | 'settings' | 'notes' | 'reports'
 export type ThemeMode = 'light' | 'dark' | 'system'
 
 export interface Commit {
@@ -49,6 +49,22 @@ export interface Note {
   updatedAt: Date
 }
 
+export interface WeeklyReport {
+  id: string
+  title: string
+  weekStart: string
+  weekEnd: string
+  content: string
+  templateId?: string | null
+  author?: string | null
+  sourceCommits: Commit[]
+  sourceNotes: Note[]
+  splitTargetDates: string[]
+  splitStatus: 'not_split' | 'partial' | 'completed'
+  createdAt: Date
+  updatedAt: Date
+}
+
 interface AppState {
   initialized: boolean
   initializeStore: () => Promise<void>
@@ -70,6 +86,7 @@ interface AppState {
   setCommits: (commits: Commit[]) => void
   selectedCommits: string[]
   toggleCommit: (hash: string) => void
+  selectCommits: (hashes: string[]) => void
   selectAllCommits: () => void
   clearSelectedCommits: () => void
 
@@ -103,6 +120,15 @@ interface AppState {
   selectAllNotes: () => void
   clearSelectedNotes: () => void
   selectAllNotesAndCommits: () => void
+
+  weeklyReports: WeeklyReport[]
+  loadWeeklyReports: () => Promise<void>
+  saveWeeklyReport: (
+    report: Omit<WeeklyReport, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ) => Promise<WeeklyReport | null>
+  deleteWeeklyReport: (id: string) => Promise<void>
+  selectedWeeklyReportId: string | null
+  setSelectedWeeklyReportId: (id: string | null) => void
 
   dateRange: { start: Date; end: Date }
   setDateRange: (range: { start: Date; end: Date }) => void
@@ -195,6 +221,21 @@ const saveNotes = (notes: Note[]) => {
   window.electron.ipcRenderer.invoke('save-notes', notes)
 }
 
+const parseWeeklyReport = (report: WeeklyReport): WeeklyReport => ({
+  ...report,
+  sourceCommits: (report.sourceCommits || []).map((commit) => ({
+    ...commit,
+    date: new Date(commit.date)
+  })),
+  sourceNotes: (report.sourceNotes || []).map((note) => ({
+    ...note,
+    createdAt: new Date(note.createdAt),
+    updatedAt: new Date(note.updatedAt)
+  })),
+  createdAt: new Date(report.createdAt),
+  updatedAt: new Date(report.updatedAt)
+})
+
 // 保存主题设置
 const saveThemeMode = (mode: ThemeMode) => {
   window.electron.ipcRenderer.invoke('save-theme-mode', mode)
@@ -283,6 +324,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ notes: savedNotes })
       }
 
+      const savedWeeklyReports = await window.electron.ipcRenderer.invoke('get-weekly-reports')
+      if (savedWeeklyReports && Array.isArray(savedWeeklyReports)) {
+        set({ weeklyReports: savedWeeklyReports.map(parseWeeklyReport) })
+      }
+
       // 加载主题设置
       const savedThemeMode = await window.electron.ipcRenderer.invoke('get-theme-mode')
       const themeMode = (savedThemeMode as ThemeMode) || 'system'
@@ -364,6 +410,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedCommits: state.selectedCommits.includes(hash)
         ? state.selectedCommits.filter((h) => h !== hash)
         : [...state.selectedCommits, hash]
+    })),
+  selectCommits: (hashes) =>
+    set((state) => ({
+      selectedCommits: Array.from(new Set([...state.selectedCommits, ...hashes]))
     })),
   selectAllCommits: () =>
     set((state) => ({
@@ -490,6 +540,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedCommits: state.commits.map((c) => c.hash),
       selectedNotes: state.notes.map((n) => n.date)
     })),
+
+  weeklyReports: [],
+  loadWeeklyReports: async () => {
+    const reports = await window.electron.ipcRenderer.invoke('get-weekly-reports')
+    if (reports && Array.isArray(reports)) {
+      set({ weeklyReports: reports.map(parseWeeklyReport) })
+    }
+  },
+  saveWeeklyReport: async (report) => {
+    const savedReport = await window.electron.ipcRenderer.invoke('save-weekly-report', report)
+    if (!savedReport) return null
+
+    const parsedReport = parseWeeklyReport(savedReport)
+    set((state) => ({
+      weeklyReports: [parsedReport, ...state.weeklyReports.filter((item) => item.id !== parsedReport.id)]
+        .sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
+      selectedWeeklyReportId: parsedReport.id
+    }))
+
+    return parsedReport
+  },
+  deleteWeeklyReport: async (id) => {
+    await window.electron.ipcRenderer.invoke('delete-weekly-report', id)
+    set((state) => ({
+      weeklyReports: state.weeklyReports.filter((report) => report.id !== id),
+      selectedWeeklyReportId:
+        state.selectedWeeklyReportId === id ? null : state.selectedWeeklyReportId
+    }))
+  },
+  selectedWeeklyReportId: null,
+  setSelectedWeeklyReportId: (id) => set({ selectedWeeklyReportId: id }),
 
   dateRange: {
     start: new Date(new Date().setHours(0, 0, 0, 0)),

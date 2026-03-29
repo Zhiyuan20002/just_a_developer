@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderGit2, FileText, NotebookPen } from 'lucide-react'
+import { LayoutDashboard, FolderGit2, FileText, NotebookPen, ScrollText } from 'lucide-react'
 import { Button, Tooltip } from '@heroui/react'
 import { getGreeting } from '@/lib/utils'
 import { useAppStore, ViewType } from '@/stores/app-store'
@@ -12,6 +12,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'dashboard', icon: LayoutDashboard, label: '仪表盘' },
   { id: 'projects', icon: FolderGit2, label: '项目库' },
+  { id: 'reports', icon: ScrollText, label: '周报' },
   { id: 'notes', icon: NotebookPen, label: '笔记' },
   { id: 'templates', icon: FileText, label: '模版中心' }
 ]
